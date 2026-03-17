@@ -1,0 +1,11 @@
+{
+  "name": "campusassist",
+  "version": "1.0.0",
+  "description": "CampusAssist – Smart Academic Management & Collaboration Platform",
+  "scripts": {
+    "backend": "cd backend && npm run dev",
+    "frontend": "cd frontend && npm start",
+    "install:all": "cd backend && npm install && cd ../frontend && npm install",
+    "setup": "npm run install:all && echo '\\n✅ Run: mysql -u root -p campusassist < backend/database/schema.sql\\nThen update backend/.env with your DB password\\nThen run: npm run backend (terminal 1) && npm run frontend (terminal 2)'"
+  }
+}
