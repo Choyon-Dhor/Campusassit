@@ -4,13 +4,17 @@
 
 class BaseUser {
   constructor(data) {
-    this.id = data.id;
-    this.name = data.name;
-    this.email = data.email;
-    this.role = data.role;
-    this.department = data.department;
-    this.avatar = data.avatar;
-    this.created_at = data.created_at;
+    this.id             = data.id;
+    this.name           = data.name;
+    this.email          = data.email;
+    this.role           = data.role;
+    this.department     = data.department;
+    this.avatar         = data.avatar;
+    this.created_at     = data.created_at;
+    // Student-specific fields
+    this.student_number = data.student_number || null;
+    this.batch_number   = data.batch_number   || null;
+    this.batch_section  = data.batch_section  || null;
   }
 
   getPermissions() {
@@ -19,13 +23,16 @@ class BaseUser {
 
   toJSON() {
     return {
-      id: this.id,
-      name: this.name,
-      email: this.email,
-      role: this.role,
-      department: this.department,
-      avatar: this.avatar,
-      permissions: this.getPermissions(),
+      id:             this.id,
+      name:           this.name,
+      email:          this.email,
+      role:           this.role,
+      department:     this.department,
+      avatar:         this.avatar,
+      student_number: this.student_number,
+      batch_number:   this.batch_number,
+      batch_section:  this.batch_section,
+      permissions:    this.getPermissions(),
     };
   }
 }

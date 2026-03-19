@@ -22,7 +22,8 @@ class UserRepository extends BaseRepository {
 
   async findActive() {
     return await this.db.query(
-      `SELECT id, name, email, role, department, avatar, created_at
+      `SELECT id, name, email, role, department, avatar,
+              student_number, batch_number, batch_section, created_at
        FROM users WHERE is_active = TRUE ORDER BY name`
     );
   }

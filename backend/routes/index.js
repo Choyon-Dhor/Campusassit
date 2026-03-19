@@ -23,12 +23,14 @@ const db = require('../config/database');
 
 // ── Auth ─────────────────────────────────────────────────────
 const authRouter = express.Router();
-authRouter.post('/register',         authCtrl.register);
-authRouter.post('/login',            authCtrl.login);
-authRouter.get('/me',           auth, authCtrl.getMe);
-authRouter.put('/profile',      auth, authCtrl.updateProfile);
-authRouter.put('/change-password', auth, authCtrl.changePassword);
-authRouter.get('/users',        auth, isAdmin, authCtrl.getAllUsers);
+authRouter.post('/register',              authCtrl.register);
+authRouter.post('/login',                 authCtrl.login);
+authRouter.get('/me',              auth,           authCtrl.getMe);
+authRouter.put('/profile',         auth,           authCtrl.updateProfile);
+authRouter.put('/change-password', auth,           authCtrl.changePassword);
+authRouter.get('/users',           auth, isAdmin,  authCtrl.getAllUsers);
+authRouter.put('/admin/users/:id', auth, isAdmin,  authCtrl.adminUpdateUser);
+authRouter.patch('/admin/users/:id/toggle', auth, isAdmin, authCtrl.adminToggleUser);
 
 // ── Announcements ─────────────────────────────────────────────
 const annRouter = express.Router();
@@ -167,11 +169,19 @@ dashRouter.get('/stats', auth, dashboardStats);
 // ── Results ───────────────────────────────────────────────────
 const resultCtrl  = require('../controllers/resultController');
 const resultRouter = express.Router();
-resultRouter.get('/me',              auth,                  resultCtrl.getMyResults);
-resultRouter.get('/semesters',       auth,                  resultCtrl.getSemesters);
-resultRouter.get('/:studentNumber',  auth, isTeacherOrAdmin, resultCtrl.getByStudentNumber);
-resultRouter.post('/upload',         auth, isTeacherOrAdmin, resultCtrl.uploadResult);
-resultRouter.patch('/:id/publish',   auth, isAdmin,          resultCtrl.publishResult);
+resultRouter.get('/students',               auth, isTeacherOrAdmin, resultCtrl.getStudentList);
+resultRouter.get('/semesters',              auth,                   resultCtrl.getSemesters);
+resultRouter.get('/me',                     auth,                   resultCtrl.getMyResults);
+resultRouter.get('/student/:studentNumber', auth, isTeacherOrAdmin, resultCtrl.getByStudentNumber);
+resultRouter.post('/upload',                auth, isTeacherOrAdmin, resultCtrl.uploadResult);
+resultRouter.post('/bulk-save',             auth, isTeacherOrAdmin, resultCtrl.bulkSave);
+resultRouter.post('/import-csv',            auth, isTeacherOrAdmin,
+  require('multer')({ dest: require('path').join(__dirname,'../uploads/tmp'), limits:{fileSize:2*1024*1024} }).single('csv'),
+  resultCtrl.importCSV);
+resultRouter.put('/:id',                    auth, isTeacherOrAdmin, resultCtrl.updateResult);
+resultRouter.delete('/:id',                auth, isTeacherOrAdmin, resultCtrl.deleteResult);
+resultRouter.patch('/publish-semester',     auth, isTeacherOrAdmin, resultCtrl.publishSemester);
+resultRouter.patch('/:id/publish',          auth, isAdmin,          resultCtrl.publishResult);
 
 // ── Bus Schedule ──────────────────────────────────────────────
 const busCtrl   = require('../controllers/busController');
@@ -181,7 +191,7 @@ busRouter.get('/routes',   auth, busCtrl.getAllRoutes);
 busRouter.get('/next',     auth, busCtrl.getNextBuses);
 
 // ── Batch Routine ─────────────────────────────────────────────
-const batchCtrl   = require('../controllers/busController'); // re-export from same file
+// (busCtrl already imported above)
 const routineRouter = express.Router();
 routineRouter.get('/batches',                  auth, busCtrl.getBatchList);
 routineRouter.get('/free-rooms',               auth, busCtrl.getFreeRooms);

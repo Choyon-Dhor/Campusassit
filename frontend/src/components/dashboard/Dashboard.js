@@ -5,10 +5,10 @@ import { Grid, Card, CardContent, CardHeader, Chip, LinearProgress, Divider, But
 import {
   People, Campaign, MenuBook, Group, Assignment,
   TrendingUp, Star, GetApp, AccessTime, CheckCircle,
-  ArrowForward, EmojiEvents
+  ArrowForward, EmojiEvents, CalendarMonth, DirectionsBus, School
 } from '@mui/icons-material';
 import { useAuth } from '../../context/AuthContext';
-import { dashboardService, resourceService, announcementService, deadlineService } from '../../services/api';
+import { dashboardService, resourceService, announcementService, deadlineService, batchRoutineService, busService } from '../../services/api';
 import { formatDistanceToNow, isPast, differenceInDays, differenceInHours } from 'date-fns';
 
 // Countdown helper
@@ -34,6 +34,8 @@ export default function Dashboard() {
   const [recommendations, setRecommendations] = useState([]);
   const [announcements, setAnnouncements] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [todayClasses, setTodayClasses] = useState([]);
+  const [nextBuses, setNextBuses] = useState([]);
 
   useEffect(() => {
     loadDashboard();
@@ -52,6 +54,19 @@ export default function Dashboard() {
 
       const recRes = await resourceService.getRecommendations({ limit: 4, department: user?.department });
       setRecommendations(recRes.data.resources || []);
+
+      // Load today's classes if student has batch info
+      if (user?.batch_number && user?.batch_section) {
+        try {
+          const routineRes = await batchRoutineService.getTodayClasses(user.batch_number, user.batch_section);
+          setTodayClasses(routineRes.data.classes || []);
+        } catch {}
+      }
+      // Load next buses
+      try {
+        const busRes = await busService.getNextBuses();
+        setNextBuses(busRes.data.nextBuses || []);
+      } catch {}
     } catch (err) {
       console.error('Dashboard load error:', err);
     } finally {
@@ -184,6 +199,79 @@ export default function Dashboard() {
             </CardContent>
           </Card>
         </Grid>
+
+        {/* Today's Classes */}
+        {todayClasses.length > 0 && (
+          <Grid item xs={12} md={6}>
+            <Card sx={{ borderRadius: 3 }}>
+              <CardHeader
+                title={<span><CalendarMonth sx={{ mr: 1, verticalAlign: 'middle', color: '#1a73e8', fontSize: 20 }} />Today's Classes</span>}
+                subheader={`${user?.batch_number ? `CSE-${user.batch_number} [${user.batch_section}]` : ''} · ${new Date().toLocaleDateString('en-US', { weekday: 'long' })}`}
+                titleTypographyProps={{ fontWeight: 600, fontSize: '1rem' }}
+                action={<Button size="small" endIcon={<ArrowForward />} onClick={() => navigate('/routine')}>Routine</Button>}
+                sx={{ pb: 0 }}
+              />
+              <CardContent>
+                {todayClasses.map((cls, i) => (
+                  <div key={i} style={{
+                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                    padding: '8px 0', borderBottom: i < todayClasses.length - 1 ? '1px solid #f1f3f4' : 'none'
+                  }}>
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: 13 }}>{cls.course_code}</div>
+                      <div style={{ fontSize: 12, color: '#5f6368' }}>{cls.course_name?.substring(0,35)}</div>
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: '#1a73e8' }}>
+                        {cls.start_time?.slice(0,5)} – {cls.end_time?.slice(0,5)}
+                      </div>
+                      <div style={{ fontSize: 11, color: '#5f6368' }}>Room {cls.room_name}</div>
+                    </div>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          </Grid>
+        )}
+
+        {/* Next Buses */}
+        {nextBuses.length > 0 && (
+          <Grid item xs={12} md={todayClasses.length > 0 ? 6 : 4}>
+            <Card sx={{ borderRadius: 3 }}>
+              <CardHeader
+                title={<span><DirectionsBus sx={{ mr: 1, verticalAlign: 'middle', color: '#34a853', fontSize: 20 }} />Next Buses</span>}
+                subheader="Departing within 2 hours"
+                titleTypographyProps={{ fontWeight: 600, fontSize: '1rem' }}
+                action={<Button size="small" endIcon={<ArrowForward />} onClick={() => navigate('/bus')}>Schedule</Button>}
+                sx={{ pb: 0 }}
+              />
+              <CardContent>
+                {nextBuses.slice(0, 4).map((bus, i) => {
+                  const [h, m] = (bus.departure_time || '').slice(0,5).split(':').map(Number);
+                  const ampm = h >= 12 ? 'PM' : 'AM';
+                  const h12 = h % 12 || 12;
+                  const dirColor = bus.direction === 'to_campus' ? '#34a853' : bus.direction === 'from_campus' ? '#ea4335' : '#1a73e8';
+                  return (
+                    <div key={i} style={{
+                      display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                      padding: '8px 0', borderBottom: i < Math.min(nextBuses.length, 4) - 1 ? '1px solid #f1f3f4' : 'none'
+                    }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 12, fontWeight: 600, color: '#202124', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {bus.short_name || bus.route_name?.substring(0, 40)}
+                        </div>
+                        <div style={{ fontSize: 11, color: '#5f6368' }}>Bus: {bus.bus_number}</div>
+                      </div>
+                      <div style={{ background: dirColor + '20', color: dirColor, borderRadius: 10, padding: '3px 10px', fontWeight: 700, fontSize: 13, flexShrink: 0, marginLeft: 8 }}>
+                        {h12}:{String(m).padStart(2,'0')} {ampm}
+                      </div>
+                    </div>
+                  );
+                })}
+              </CardContent>
+            </Card>
+          </Grid>
+        )}
 
         {/* Smart Recommendations */}
         <Grid item xs={12}>

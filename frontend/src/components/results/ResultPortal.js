@@ -8,11 +8,12 @@ import {
 } from '@mui/material';
 import {
   EmojiEvents, School, Print, Search, TrendingUp,
-  CheckCircle, StarRate
+  CheckCircle, StarRate, Edit
 } from '@mui/icons-material';
 import { useAuth } from '../../context/AuthContext';
 import { resultService } from '../../services/api';
 import { toast } from 'react-toastify';
+import ResultEntry from './ResultEntry';
 
 // Grade color map
 const gradeStyle = {
@@ -147,7 +148,7 @@ export default function ResultPortal() {
     if (!searchNum.trim()) return;
     setSearching(true);
     try {
-      const res = await resultService.getByStudentNumber(searchNum.trim());
+      const res = await resultService.getByStudentNumber(searchNum.trim(), { includeUnpublished: false });
       setData(res.data);
       toast.success(`Results loaded for ${searchNum}`);
     } catch { toast.error('Student not found or no published results.'); }
@@ -207,6 +208,7 @@ export default function ResultPortal() {
       <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ mb: 3, borderBottom: '1px solid #dadce0' }}>
         <Tab label="My Results" />
         {isTeacherOrAdmin && <Tab label="Search by Student ID" />}
+        {isTeacherOrAdmin && <Tab label={<span><Edit sx={{ fontSize:15, mr:0.5, verticalAlign:'middle' }} />Enter / Edit Results</span>} />}
       </Tabs>
 
       {/* ── Tab 1: Search (admin/faculty) ── */}
@@ -310,6 +312,9 @@ export default function ResultPortal() {
           </Grid>
         </Grid>
       )}
+
+      {/* ── Tab 2: Entry Sheet (teacher/admin only) ── */}
+      {tab === 2 && isTeacherOrAdmin && <ResultEntry />}
     </div>
   );
 }

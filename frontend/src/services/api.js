@@ -48,6 +48,8 @@ export const authService = {
   updateProfile: (data) => api.put('/auth/profile', data),
   changePassword: (data) => api.put('/auth/change-password', data),
   getAllUsers: () => api.get('/auth/users'),
+  updateUser: (id, data) => api.put(`/auth/users/${id}`, data),
+  toggleUserActive: (id) => api.patch(`/auth/users/${id}/toggle`),
 };
 
 // ── Announcements ─────────────────────────────────────────────
@@ -131,9 +133,26 @@ export default api;
 export const resultService = {
   getMyResults:         ()             => api.get('/results/me'),
   getSemesters:         ()             => api.get('/results/semesters'),
-  getByStudentNumber:   (num)          => api.get(`/results/${num}`),
+  getStudentList:       (params)       => api.get('/results/students', { params }),
+  getByStudentNumber:   (num, params)  => api.get(`/results/student/${num}`, { params }),
   uploadResult:         (data)         => api.post('/results/upload', data),
+  bulkSave:             (data)         => api.post('/results/bulk-save', data),
+  updateResult:         (id, data)     => api.put(`/results/${id}`, data),
+  deleteResult:         (id)           => api.delete(`/results/${id}`),
   publishResult:        (id)           => api.patch(`/results/${id}/publish`),
+  publishSemester:      (data)         => api.patch('/results/publish-semester', data),
+  importCSV:            (formData)     => api.post('/results/import-csv', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  }),
+  downloadCSVTemplate:  ()             => {
+    const header = 'student_number,course_code,course_title,credit_hours,letter_grade,batch_section\n';
+    const example = '231-115-094,CSE-421,Artificial Intelligence,3,A+,58th[C]\n';
+    const blob = new Blob([header + example], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'result_import_template.csv'; a.click();
+    URL.revokeObjectURL(url);
+  },
 };
 
 // ── Bus ───────────────────────────────────────────────────────

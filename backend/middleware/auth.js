@@ -16,7 +16,8 @@ const auth = async (req, res, next) => {
 
     // pg: positional $1 placeholder, returns rows array
     const user = await db.queryOne(
-      `SELECT id, name, email, role, department, avatar, is_active
+      `SELECT id, name, email, role, department, avatar, is_active,
+              student_number, batch_number, batch_section
        FROM users WHERE id = $1`,
       [decoded.id]
     );
