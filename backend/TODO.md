@@ -1,0 +1,2 @@
+# Vercel Backend Deployment TODO\n\n## Plan Breakdown:\n1. ✅ Create backend/vercel.json configuration file\n2. ✅ Update backend/package.json with Vercel-compatible build/start scripts  \n3. [ ] User: Deploy backend/ directory to new Vercel project\n4. [ ] User: Configure environment variables in Vercel dashboard (DATABASE_URL, JWT_SECRET, etc.)\n5. [ ] User: Test /api/health endpoint\n6. [ ] User: Update frontend API baseURL to Vercel URL\n7. [ ] [Optional] Address file upload limitations (switch to cloud storage)\n8. [ ] Mark complete
+
