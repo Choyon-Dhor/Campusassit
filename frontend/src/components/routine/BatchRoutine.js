@@ -12,14 +12,56 @@ import { batchRoutineService } from '../../services/api';
 import { toast } from 'react-toastify';
 
 const DAYS = ['Sunday','Monday','Tuesday','Wednesday','Thursday'];
-const TIME_SLOTS = [
+const DEFAULT_TIME_SLOTS = [
   '9:00-10:15', '10:15-11:30', '11:30-12:45',
   '1:00-2:15',  '2:15-3:30',  '3:30-4:45'
 ];
-const SLOT_LABELS = [
-  '9:00 AM', '10:15 AM', '11:30 AM',
-  '1:00 PM', '2:15 PM',  '3:30 PM'
-];
+
+function parseTimeToMinutes(t) {
+  if (!t || typeof t !== 'string') return Number.MAX_SAFE_INTEGER;
+  const match = t.trim().match(/(\d{1,2}):(\d{2})(?:\s*(AM|PM))?/i);
+  if (!match) return Number.MAX_SAFE_INTEGER;
+  let [, hh, mm, ampm] = match;
+  let h = parseInt(hh, 10);
+  const m = parseInt(mm, 10);
+  if (Number.isNaN(h) || Number.isNaN(m)) return Number.MAX_SAFE_INTEGER;
+  if (ampm) {
+    const upper = ampm.toUpperCase();
+    if (upper === 'PM' && h < 12) h += 12;
+    if (upper === 'AM' && h === 12) h = 0;
+  }
+  return h * 60 + m;
+}
+
+function formatTime(t) {
+  const match = t.trim().match(/(\d{1,2}):(\d{2})(?:\s*(AM|PM))?/i);
+  if (!match) return t;
+  let [, hh, mm, ampm] = match;
+  let h = parseInt(hh, 10);
+  const m = parseInt(mm, 10);
+  if (Number.isNaN(h) || Number.isNaN(m)) return t;
+
+  if (ampm) {
+    const upper = ampm.toUpperCase();
+    if (upper === 'PM' && h < 12) h += 12;
+    if (upper === 'AM' && h === 12) h = 0;
+  }
+
+  const pm = h >= 12;
+  const hour12 = ((h + 11) % 12) + 1;
+  return `${hour12}:${String(m).padStart(2,'0')} ${pm ? 'PM' : 'AM'}`;
+}
+
+function formatSlotLabel(slot) {
+  // Support formats like "09:00-10:15" or "01:40 PM to 02:30 PM".
+  const parts = slot.split(/\s*(?:-|to|–|—)\s*/i).map(p => p.trim()).filter(Boolean);
+  if (parts.length === 0) return slot;
+
+  const formatted = parts.map(p => formatTime(p)).filter(Boolean);
+  if (formatted.length === 0) return slot;
+  return formatted.join(' - ');
+}
+
 
 // Course colour palette (consistent per code)
 const courseColors = [
@@ -73,6 +115,7 @@ export default function BatchRoutine() {
   const [loading, setLoading] = useState(false);
   const [batchOptions, setBatchOptions] = useState([]);
   const [sectionOptions, setSectionOptions] = useState([]);
+  const [timeSlots, setTimeSlots] = useState(DEFAULT_TIME_SLOTS);
 
   useEffect(() => { loadBatches(); }, []);
 
@@ -81,22 +124,31 @@ export default function BatchRoutine() {
       const res = await batchRoutineService.getBatches();
       const raw = res.data.batches || [];
       setBatches(raw);
-      // Unique batch numbers
-      const nums = [...new Set(raw.map(b => b.batch_number))].sort((a,b)=>a-b);
-      setBatchOptions(nums);
-      // Default to batch 58
-      if (nums.includes(58)) {
-        setSelectedBatch(58);
-        const secs = raw.filter(b => b.batch_number === 58).map(b => b.batch_section);
+
+      // Unique numeric batch numbers (if any)
+      const numericBatches = raw.filter(b => Number.isFinite(b.batch_number));
+      const nums = [...new Set(numericBatches.map(b => b.batch_number))].sort((a,b)=>a-b);
+      if (nums.length) {
+        setBatchOptions(nums);
+        // Default to batch 58 if present
+        const defaultBatch = nums.includes(58) ? 58 : nums[0];
+        setSelectedBatch(defaultBatch);
+        const secs = raw.filter(b => b.batch_number === defaultBatch).map(b => b.batch_section);
         setSectionOptions(secs);
-        setSelectedSection('C+G');
-      } else if (nums.length) {
-        setSelectedBatch(nums[0]);
-        const secs = raw.filter(b => b.batch_number === nums[0]).map(b => b.batch_section);
+        if (secs.length) setSelectedSection(secs.includes('C+G') ? 'C+G' : secs[0]);
+      } else if (raw.length) {
+        // Fallback: use the raw batch string if numeric batch numbers are not available
+        const first = raw[0];
+        const uniqueBatches = [...new Set(raw.map(b => b.batch))];
+        setBatchOptions(uniqueBatches);
+        setSelectedBatch(first.batch);
+        const secs = raw.filter(b => b.batch === first.batch).map(b => b.batch_section);
         setSectionOptions(secs);
         if (secs.length) setSelectedSection(secs[0]);
       }
-    } catch { toast.error('Could not load batches'); }
+    } catch {
+      toast.error('Could not load batches');
+    }
   };
 
   useEffect(() => {
@@ -110,9 +162,23 @@ export default function BatchRoutine() {
     setLoading(true);
     try {
       const res = await batchRoutineService.getRoutine(selectedBatch, selectedSection);
-      setRoutine(res.data.routine || []);
-    } catch { toast.error('Could not load routine'); }
-    finally { setLoading(false); }
+      const data = res.data.routine || [];
+      setRoutine(data);
+
+      // Dynamic time slots (per uploaded routine)
+      const slots = [...new Set(data.map(d => d.time_slot).filter(Boolean))];
+      if (slots.length) {
+        slots.sort((a, b) => parseTimeToMinutes(a) - parseTimeToMinutes(b));
+        setTimeSlots(slots);
+      } else {
+        setTimeSlots(DEFAULT_TIME_SLOTS);
+      }
+    } catch {
+      toast.error('Could not load routine');
+      setTimeSlots(DEFAULT_TIME_SLOTS);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const loadToday = async () => {
@@ -123,8 +189,14 @@ export default function BatchRoutine() {
   };
 
   const handleBatchChange = (bn) => {
-    setSelectedBatch(bn);
-    const secs = batches.filter(b => b.batch_number === parseInt(bn)).map(b => b.batch_section);
+    const numericValue = Number(bn);
+    const isNumeric = !Number.isNaN(numericValue);
+    const selected = isNumeric ? numericValue : bn;
+    setSelectedBatch(selected);
+
+    const secs = batches
+      .filter(b => isNumeric ? b.batch_number === numericValue : b.batch === bn)
+      .map(b => b.batch_section);
     setSectionOptions(secs);
     setSelectedSection(secs[0] || '');
   };
@@ -155,7 +227,11 @@ export default function BatchRoutine() {
         <FormControl size="small" sx={{ minWidth: 130 }}>
           <InputLabel>Batch</InputLabel>
           <Select value={selectedBatch} onChange={e => handleBatchChange(e.target.value)} label="Batch">
-            {batchOptions.map(n => <MenuItem key={n} value={n}>CSE-{n}</MenuItem>)}
+            {batchOptions.map(n => (
+              <MenuItem key={n} value={n}>
+                {Number.isFinite(Number(n)) ? `CSE-${n}` : n}
+              </MenuItem>
+            ))}
           </Select>
         </FormControl>
         <FormControl size="small" sx={{ minWidth: 120 }}>
@@ -166,7 +242,11 @@ export default function BatchRoutine() {
         </FormControl>
         {selectedBatch && selectedSection && (
           <Chip
-            label={`CSE-${selectedBatch} [${selectedSection}] — Spring 2026`}
+            label={
+              Number.isFinite(Number(selectedBatch))
+                ? `CSE-${selectedBatch} [${selectedSection}]`
+                : selectedBatch
+            }
             color="primary" variant="outlined" sx={{ fontWeight: 600 }}
           />
         )}
@@ -226,9 +306,9 @@ export default function BatchRoutine() {
               <thead>
                 <tr style={{ background: '#1a73e8' }}>
                   <th style={{ padding: '10px 12px', color: 'white', fontWeight: 600, fontSize: 12, width: 90 }}>Day</th>
-                  {TIME_SLOTS.map((slot, i) => (
+                  {timeSlots.map((slot, i) => (
                     <th key={slot} style={{ padding: '10px 8px', color: 'white', fontWeight: 600, fontSize: 11, textAlign: 'center' }}>
-                      {SLOT_LABELS[i]}<br /><span style={{ fontSize: 10, opacity: 0.8 }}>{slot}</span>
+                      {formatSlotLabel(slot)}<br /><span style={{ fontSize: 10, opacity: 0.8 }}>{slot}</span>
                     </th>
                   ))}
                 </tr>
@@ -244,7 +324,7 @@ export default function BatchRoutine() {
                       {day === today && <span style={{ marginRight: 4 }}>📍</span>}
                       {day}
                     </td>
-                    {TIME_SLOTS.map(slot => {
+                    {timeSlots.map(slot => {
                       const entries = grid[day]?.[slot];
                       return (
                         <td key={slot} style={{ padding: 4, border: '1px solid #e0e0e0', verticalAlign: 'top', minWidth: 130 }}>

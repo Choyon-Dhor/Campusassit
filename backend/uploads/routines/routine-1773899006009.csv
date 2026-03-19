@@ -1,0 +1,14 @@
+day,batch,time_slot,course_code,course_name,room_name,faculty_name
+Wednesday,CSE-61A,09:00 AM-10:15 AM,STA 215,Basic Statistics & Probability,508,Nazrul Islam
+Wednesday,CSE-61A,10:15 AM-11:30 AM,CSE 221,Object Oriented Programming,508,NIRCOA
+Wednesday,CSE-61B,09:00 AM-10:15 AM,STA 215,Basic Statistics & Probability,404,Ruhul Amin
+Wednesday,CSE-61B,10:15 AM-11:30 AM,CSE 221,Object Oriented Programming,508,Nasif Istiak Remon
+Wednesday,CSE-61C,09:00 AM-10:15 AM,CSE 221,Object Oriented Programming,506,Plabon Talukder
+Wednesday,CSE-61C,10:15 AM-11:30 AM,STA 215,Basic Statistics & Probability,506,Ruhul Amin
+Wednesday,CSE-61D,09:00 AM-10:15 AM,CSE 222,Object Oriented Programming Lab,307,New 3
+Wednesday,CSE-61D,10:15 AM-11:30 AM,CSE 222,Object Oriented Programming Lab,307,New 3
+Wednesday,CSE-61E,09:00 AM-10:15 AM,CSE 213,Computer Organization & Architecture,GL-2,New4OOP
+Wednesday,CSE-61E,10:15 AM-11:30 AM,Unknown,505,New1IM&FA,GL-2
+Wednesday,CSE-61F,09:00 AM-10:15 AM,STA 215,Basic Statistics & Probability,203,Muhammad Muzammil
+Wednesday,CSE-61G,09:00 AM-10:15 AM,CSE 222,Object Oriented Programming Lab,311,AHC
+Wednesday,CSE-61G,10:15 AM-11:30 AM,CSE 222,Object Oriented Programming Lab,311,AHC

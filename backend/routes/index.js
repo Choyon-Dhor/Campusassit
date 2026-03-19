@@ -6,7 +6,7 @@ const router  = express.Router();
 const path    = require('path');
 const fs      = require('fs');
 const { auth, isAdmin, isTeacherOrAdmin } = require('../middleware/auth');
-const { uploadResource, uploadRoutine }   = require('../middleware/upload');
+const { uploadResource, uploadRoutine, uploadBusSchedule } = require('../middleware/upload');
 
 // Controllers
 const authCtrl  = require('../controllers/authController');
@@ -189,6 +189,7 @@ const busRouter = express.Router();
 busRouter.get('/schedule', auth, busCtrl.getSchedule);
 busRouter.get('/routes',   auth, busCtrl.getAllRoutes);
 busRouter.get('/next',     auth, busCtrl.getNextBuses);
+busRouter.post('/schedule/upload', auth, isAdmin, uploadBusSchedule, busCtrl.uploadBusSchedule);
 
 // ── Batch Routine ─────────────────────────────────────────────
 // (busCtrl already imported above)

@@ -1,5 +1,5 @@
 // src/components/bus/BusSchedule.js
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Grid, Card, CardContent, Chip, Button, TextField,
   Tabs, Tab, Select, MenuItem, FormControl, InputLabel,
@@ -7,8 +7,10 @@ import {
 } from '@mui/material';
 import {
   DirectionsBus, AccessTime, Place, ArrowForward,
-  NorthEast, SouthWest, SwapHoriz, Search as SearchIcon
+  NorthEast, SouthWest, SwapHoriz, Search as SearchIcon,
+  UploadFile
 } from '@mui/icons-material';
+import { useAuth } from '../../context/AuthContext';
 import { busService } from '../../services/api';
 import { toast } from 'react-toastify';
 
@@ -46,29 +48,6 @@ function TimelineBus({ route }) {
             )}
           </div>
 
-          {/* Stop timeline */}
-          {stops.length > 0 && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap', margin: '8px 0' }}>
-              {stops.map((s, i) => (
-                <React.Fragment key={i}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-                    <div style={{
-                      width: 8, height: 8, borderRadius: '50%',
-                      background: i === 0 ? dc.color : i === stops.length - 1 ? '#ea4335' : '#dadce0',
-                      flexShrink: 0
-                    }} />
-                    <span style={{ fontSize: 11, color: '#3c4043', whiteSpace: 'nowrap' }}>
-                      {s.stop_name}
-                    </span>
-                  </div>
-                  {i < stops.length - 1 && (
-                    <ArrowForward sx={{ fontSize: 12, color: '#9aa0a6', flexShrink: 0 }} />
-                  )}
-                </React.Fragment>
-              ))}
-            </div>
-          )}
-
           {route.schedule_note && (
             <div style={{ fontSize: 11, color: '#5f6368', fontStyle: 'italic', marginTop: 4 }}>
               ℹ️ {route.schedule_note}
@@ -79,6 +58,20 @@ function TimelineBus({ route }) {
             {route.driver_name && <span>Driver: <strong>{route.driver_name}</strong> · </span>}
             Capacity: Students
           </div>
+
+          {stops.length > 0 && (
+            <div style={{ marginTop: 12 }}>
+              {stops.map((stop, idx) => (
+                <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#5f6368' }}>
+                  <Place sx={{ fontSize: 16 }} />
+                  <span>
+                    {stop.stop_name}
+                    {stop.pickup_time ? ` — ${formatTime(stop.pickup_time)}` : ''}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Time box */}
@@ -112,12 +105,16 @@ function formatTime(t) {
 }
 
 export default function BusSchedule() {
+  const { user } = useAuth();
   const [tab, setTab] = useState(0);
   const [schedule, setSchedule] = useState({ to_campus: [], from_campus: [], shuttle: [] });
   const [nextBuses, setNextBuses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [currentTime, setCurrentTime] = useState('');
+  const [uploading, setUploading] = useState(false);
+  const [uploadFile, setUploadFile] = useState(null);
+  const fileInputRef = useRef(null);
 
   useEffect(() => {
     loadSchedule();
@@ -126,6 +123,43 @@ export default function BusSchedule() {
     setCurrentTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
     return () => clearInterval(tick);
   }, []);
+
+  const handleFileSelect = (e) => {
+    setUploadFile(e.target.files?.[0] || null);
+  };
+
+  const uploadSchedule = async () => {
+    if (!uploadFile) return toast.error('Please select a CSV file.');
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('schedule', uploadFile);
+      // Optionally replace current schedule
+      formData.append('replace', 'true');
+      await busService.uploadSchedule(formData);
+      toast.success('Bus schedule uploaded successfully.');
+      setUploadFile(null);
+      if (fileInputRef.current) fileInputRef.current.value = null;
+      loadSchedule();
+      loadNext();
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Upload failed');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const downloadTemplate = () => {
+    const header = 'route_name,short_name,direction,departure_time,arrival_time,bus_number,driver_name,passenger_type,route_type,schedule_note,stop_order,stop_name,pickup_time\n';
+    const example = 'Main Gate,MG,from_campus,07:30,08:00,1234,Md. Rahman,student,regular,,1,Main Gate,07:30\n';
+    const blob = new Blob([header + example], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'bus_schedule_template.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   const loadSchedule = async () => {
     setLoading(true);
@@ -172,6 +206,40 @@ export default function BusSchedule() {
           <span style={{ fontSize: 12, color: '#5f6368' }}>Live · {currentTime}</span>
         </div>
       </div>
+
+      {user?.role === 'admin' && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".csv"
+            style={{ display: 'none' }}
+            onChange={handleFileSelect}
+          />
+          <Button
+            startIcon={<UploadFile />}
+            variant="outlined"
+            size="small"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploading}
+          >
+            {uploadFile ? uploadFile.name : 'Select CSV'}
+          </Button>
+          {uploadFile && (
+            <Button
+              variant="contained"
+              size="small"
+              onClick={uploadSchedule}
+              disabled={uploading}
+            >
+              {uploading ? 'Uploading…' : 'Import'}
+            </Button>
+          )}
+          <Button variant="outlined" size="small" onClick={downloadTemplate}>
+            Template
+          </Button>
+        </div>
+      )}
 
       {/* Next departures widget */}
       {nextBuses.length > 0 && (

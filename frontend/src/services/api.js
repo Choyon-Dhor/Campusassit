@@ -160,6 +160,9 @@ export const busService = {
   getSchedule:  ()       => api.get('/bus/schedule'),
   getRoutes:    (params) => api.get('/bus/routes', { params }),
   getNextBuses: ()       => api.get('/bus/next'),
+  uploadSchedule: (formData) => api.post('/bus/schedule/upload', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  }),
 };
 
 // ── Batch Routine ─────────────────────────────────────────────

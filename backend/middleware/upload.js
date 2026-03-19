@@ -59,6 +59,26 @@ const uploadRoutine = multer({
   fileFilter: fileFilter(['csv', 'pdf', 'xlsx']),
 });
 
+// Storage for bus schedule uploads
+const busStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const dir = path.join(__dirname, '../uploads/bus');
+    ensureDir(dir);
+    cb(null, dir);
+  },
+  filename: (req, file, cb) => {
+    const unique = Date.now();
+    const ext = path.extname(file.originalname);
+    cb(null, `bus-schedule-${unique}${ext}`);
+  },
+});
+
+const uploadBusSchedule = multer({
+  storage: busStorage,
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: fileFilter(['csv']),
+});
+
 // Error handling wrapper
 const handleUploadError = (uploadMiddleware) => (req, res, next) => {
   uploadMiddleware(req, res, (err) => {
@@ -78,4 +98,5 @@ const handleUploadError = (uploadMiddleware) => (req, res, next) => {
 module.exports = {
   uploadResource: handleUploadError(uploadResource.single('file')),
   uploadRoutine: handleUploadError(uploadRoutine.single('routine')),
+  uploadBusSchedule: handleUploadError(uploadBusSchedule.single('schedule')),
 };
