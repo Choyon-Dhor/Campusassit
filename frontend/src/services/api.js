@@ -74,12 +74,11 @@ export const classroomService = {
 
   // Smart Classroom APIs
   createClassroom: (data) => api.post('/classrooms/create', data),
+  updateClassroom: (id, data) => api.put(`/classrooms/${id}`, data),
+  deleteClassroom: (id) => api.delete(`/classrooms/${id}`),
   uploadStudents: (data) => api.post('/classrooms/upload-students', data),
   listClassrooms: () => api.get('/classrooms/list'),
   getClassroom: (id) => api.get(`/classrooms/${id}`),
-  editClassroom: (id, data) => api.put(`/classrooms/${id}`, data),
-  deleteClassroom: (id) => api.delete(`/classrooms/${id}`),
-  getClassroomStats: (id) => api.get(`/classrooms/${id}/stats`),
   getClassroomStudents: (id) => api.get(`/classrooms/${id}/students`),
   markAttendance: (classroomId, data) => api.post(`/classrooms/${classroomId}/attendance/mark`, data),
   getAttendance: (classroomId, params) => api.get(`/classrooms/${classroomId}/attendance`, { params }),

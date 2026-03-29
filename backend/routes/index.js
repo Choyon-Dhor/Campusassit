@@ -44,11 +44,10 @@ annRouter.delete('/:id',    auth, isTeacherOrAdmin, annCtrl.delete);
 const classRouter = express.Router();
 // Smart Classroom endpoints - Specific routes must come before wildcard /:id
 classRouter.post('/create',                      auth, isTeacherOrAdmin, smartClassCtrl.createClassroom);
+classRouter.put('/:id',                          auth, isTeacherOrAdmin, smartClassCtrl.updateClassroom);
+classRouter.delete('/:id',                       auth, isTeacherOrAdmin, smartClassCtrl.deleteClassroom);
 classRouter.post('/upload-students',             auth, isTeacherOrAdmin, smartClassCtrl.uploadStudents);
 classRouter.get('/list',                         auth, smartClassCtrl.listClassrooms);
-classRouter.put('/:id',                          auth, smartClassCtrl.editClassroom);
-classRouter.delete('/:id',                       auth, smartClassCtrl.deleteClassroom);
-classRouter.get('/:id/stats',                    auth, smartClassCtrl.getClassroomStats);
 classRouter.get('/free',                         auth,           classCtrl.getFreeRooms);
 classRouter.get('/rooms',                        auth,           classCtrl.getAllRooms);
 classRouter.get('/routine',                      auth,           classCtrl.getRoutine);

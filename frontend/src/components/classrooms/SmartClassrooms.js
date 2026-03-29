@@ -4,10 +4,9 @@ import {
   Box, Card, CardContent, Grid, Typography, TextField, Button,
   Select, MenuItem, FormControl, InputLabel, Tabs, Tab,
   Table, TableHead, TableRow, TableCell, TableBody, LinearProgress,
-  Alert, Divider, CardHeader, Chip, Checkbox, Dialog, DialogTitle,
-  DialogContent, DialogActions, IconButton, Tooltip
+  Alert, Divider, CardHeader, Chip, Checkbox
 } from '@mui/material';
-import { Add, UploadFile, People, Checklist, BarChart, Edit, Delete, Info } from '@mui/icons-material';
+import { Add, UploadFile, People, Checklist, BarChart, Edit, Delete, Save, Cancel } from '@mui/icons-material';
 import { useAuth } from '../../context/AuthContext';
 import { classroomService } from '../../services/api';
 import { toast } from 'react-toastify';
@@ -30,6 +29,9 @@ export default function SmartClassrooms() {
   const [tab, setTab] = useState(0);
 
   const [createForm, setCreateForm] = useState(initialForm);
+  const [editForm, setEditForm] = useState(initialForm);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editingId, setEditingId] = useState(null);
   const [addStudents, setAddStudents] = useState('');
   const [attendanceDate, setAttendanceDate] = useState(new Date().toISOString().slice(0, 10));
   const [examForm, setExamForm] = useState({ title: '', marks_obtained: '', total_marks: '', student_id: '' });
@@ -38,12 +40,6 @@ export default function SmartClassrooms() {
   const [selectedStudents, setSelectedStudents] = useState(new Set());
   const [touchTableRef, setTouchTableRef] = useState(null);
   const [touchStartX, setTouchStartX] = useState(0);
-
-  // New state for editing and stats
-  const [editDialog, setEditDialog] = useState(false);
-  const [editForm, setEditForm] = useState(initialForm);
-  const [classroomStats, setClassroomStats] = useState(null);
-  const [canEdit, setCanEdit] = useState(false);
 
   useEffect(() => {
     if (isAuthenticated && user) {
@@ -115,17 +111,8 @@ export default function SmartClassrooms() {
 
   const fetchClassroomDetails = async () => {
     try {
-      const [classroomRes, statsRes] = await Promise.all([
-        classroomService.getClassroom(selectedId),
-        classroomService.getClassroomStats(selectedId)
-      ]);
-      setSelectedClassroom(classroomRes.data.classroom);
-      setClassroomStats(statsRes.data.stats);
-      
-      // Check if user can edit (teacher of this classroom or admin)
-      const canEditClassroom = user.role === 'admin' || 
-        (user.role === 'teacher' && classroomRes.data.classroom.teacher_id === user.id);
-      setCanEdit(canEditClassroom);
+      const res = await classroomService.getClassroom(selectedId);
+      setSelectedClassroom(res.data.classroom);
     } catch (err) {
       toast.error(err.message || 'Could not load classroom details.');
     }
@@ -195,46 +182,59 @@ export default function SmartClassrooms() {
     }
   };
 
-  const handleEditClassroom = async () => {
+  const handleEditClassroom = (classroom) => {
+    setEditForm({
+      course_code: classroom.course_code,
+      course_name: classroom.course_name,
+      description: classroom.description || '',
+      batch: classroom.batch,
+      section: classroom.section,
+      semester: classroom.semester,
+    });
+    setEditingId(classroom.id);
+    setIsEditing(true);
+  };
+
+  const handleUpdateClassroom = async () => {
     if (!editForm.course_code || !editForm.course_name || !editForm.batch || !editForm.section || !editForm.semester) {
       return toast.warn('Please fill all fields.');
     }
     try {
-      await classroomService.editClassroom(selectedId, editForm);
+      await classroomService.updateClassroom(editingId, editForm);
       toast.success('Classroom updated.');
-      setEditDialog(false);
-      fetchClassroomDetails();
+      setIsEditing(false);
+      setEditingId(null);
+      setEditForm(initialForm);
       fetchClassrooms();
+      if (selectedId === editingId) {
+        fetchClassroomDetails();
+      }
     } catch (err) {
       toast.error(err.message || 'Failed to update classroom.');
     }
   };
 
-  const handleDeleteClassroom = async () => {
-    if (!window.confirm('Are you sure you want to delete this classroom? This action cannot be undone.')) return;
+  const handleDeleteClassroom = async (classroomId) => {
+    if (!window.confirm('Are you sure you want to delete this classroom? This action cannot be undone.')) {
+      return;
+    }
     try {
-      await classroomService.deleteClassroom(selectedId);
+      await classroomService.deleteClassroom(classroomId);
       toast.success('Classroom deleted.');
-      setSelectedId(null);
-      setSelectedClassroom(null);
       fetchClassrooms();
+      if (selectedId === classroomId) {
+        setSelectedId(null);
+        setSelectedClassroom(null);
+      }
     } catch (err) {
       toast.error(err.message || 'Failed to delete classroom.');
     }
   };
 
-  const openEditDialog = () => {
-    if (selectedClassroom) {
-      setEditForm({
-        course_code: selectedClassroom.course_code,
-        course_name: selectedClassroom.course_name,
-        description: selectedClassroom.description || '',
-        batch: selectedClassroom.batch,
-        section: selectedClassroom.section,
-        semester: selectedClassroom.semester,
-      });
-      setEditDialog(true);
-    }
+  const handleCancelEdit = () => {
+    setIsEditing(false);
+    setEditingId(null);
+    setEditForm(initialForm);
   };
 
   const handlePostAnnouncement = async () => {
@@ -387,6 +387,89 @@ export default function SmartClassrooms() {
                   <Button startIcon={<Add />} variant="contained" fullWidth onClick={handleCreateClassroom}>Create</Button>
                 </>
               )}
+
+              {isTeacher && classrooms.length > 0 && (
+                <>
+                  <Divider sx={{ my: 2 }} />
+                  <Typography variant="subtitle1" sx={{ mb: 1, fontWeight: 700 }}>Manage Classrooms</Typography>
+                  {classrooms.map(c => (
+                    <Card key={c.id} sx={{ mb: 1, p: 1 }}>
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Box>
+                          <Typography variant="body2" fontWeight="bold">
+                            {c.course_code} - {c.course_name}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            {c.batch}{c.section ? ' ' + c.section : ''} • {c.semester}
+                          </Typography>
+                          {c.description && (
+                            <Typography variant="caption" display="block" sx={{ mt: 0.5 }}>
+                              {c.description}
+                            </Typography>
+                          )}
+                        </Box>
+                        <Box>
+                          <Button
+                            size="small"
+                            startIcon={<Edit />}
+                            onClick={() => handleEditClassroom(c)}
+                            sx={{ mr: 1 }}
+                          >
+                            Edit
+                          </Button>
+                          <Button
+                            size="small"
+                            color="error"
+                            startIcon={<Delete />}
+                            onClick={() => handleDeleteClassroom(c.id)}
+                          >
+                            Delete
+                          </Button>
+                        </Box>
+                      </Box>
+                    </Card>
+                  ))}
+                </>
+              )}
+
+              {isEditing && (
+                <>
+                  <Divider sx={{ my: 2 }} />
+                  <Typography variant="subtitle1" sx={{ mb: 1, fontWeight: 700 }}>Edit Classroom</Typography>
+                  <TextField
+                    label="Course Code" fullWidth value={editForm.course_code}
+                    onChange={(e) => setEditForm(prev => ({ ...prev, course_code: e.target.value }))} sx={{ mb: 1 }}
+                  />
+                  <TextField
+                    label="Course Name" fullWidth value={editForm.course_name}
+                    onChange={(e) => setEditForm(prev => ({ ...prev, course_name: e.target.value }))} sx={{ mb: 1 }}
+                  />
+                  <TextField
+                    label="Course Description" fullWidth multiline rows={2} value={editForm.description}
+                    onChange={(e) => setEditForm(prev => ({ ...prev, description: e.target.value }))} sx={{ mb: 1 }}
+                  />
+                  <TextField
+                    label="Batch" fullWidth value={editForm.batch}
+                    onChange={(e) => setEditForm(prev => ({ ...prev, batch: e.target.value }))} sx={{ mb: 1 }}
+                  />
+                  <TextField
+                    label="Section" fullWidth value={editForm.section}
+                    onChange={(e) => setEditForm(prev => ({ ...prev, section: e.target.value }))} sx={{ mb: 1 }}
+                  />
+                  <TextField
+                    label="Semester" fullWidth value={editForm.semester}
+                    onChange={(e) => setEditForm(prev => ({ ...prev, semester: e.target.value }))} sx={{ mb: 1 }}
+                  />
+                  <Box sx={{ display: 'flex', gap: 1 }}>
+                    <Button startIcon={<Save />} variant="contained" fullWidth onClick={handleUpdateClassroom}>
+                      Update
+                    </Button>
+                    <Button startIcon={<Cancel />} variant="outlined" fullWidth onClick={handleCancelEdit}>
+                      Cancel
+                    </Button>
+                  </Box>
+                </>
+              )}
             </CardContent>
           </Card>
 
@@ -411,10 +494,10 @@ export default function SmartClassrooms() {
           <Card sx={{ mb: 2 }}>
             <Tabs value={tab} onChange={(_, val) => setTab(val)}>
               <Tab icon={<BarChart />} label="Stream" />
-              <Tab icon={<Add />} label="Classwork" />
-              <Tab icon={<Checklist />} label="Attendance" />
+              {isTeacher && <Tab icon={<Add />} label="Classwork" />}
+              {isTeacher && <Tab icon={<Checklist />} label="Attendance" />}
               <Tab icon={<People />} label="People" />
-              <Tab icon={<Add />} label="Grades" />
+              {isTeacher && <Tab icon={<Add />} label="Grades" />}
             </Tabs>
           </Card>
 
@@ -427,69 +510,24 @@ export default function SmartClassrooms() {
             </Box>
           ) : (
             <>
-              {/* Classroom Header with Stats and Actions */}
-              <Card sx={{ mb: 2 }}>
-                <CardHeader
-                  title={
-                    <Box>
-                      <Typography variant="h5">{selectedClassroom.course_code} - {selectedClassroom.course_name}</Typography>
-                      <Typography variant="body2" color="textSecondary">
-                        {selectedClassroom.batch}{selectedClassroom.section && ` ${selectedClassroom.section}`} - {selectedClassroom.semester}
-                      </Typography>
-                      {selectedClassroom.description && (
-                        <Typography variant="body1" sx={{ mt: 1 }}>
-                          {selectedClassroom.description}
-                        </Typography>
-                      )}
-                    </Box>
-                  }
-                  action={
-                    canEdit && (
-                      <Box sx={{ display: 'flex', gap: 1 }}>
-                        <Tooltip title="Edit Classroom">
-                          <IconButton onClick={openEditDialog} color="primary">
-                            <Edit />
-                          </IconButton>
-                        </Tooltip>
-                        <Tooltip title="Delete Classroom">
-                          <IconButton onClick={handleDeleteClassroom} color="error">
-                            <Delete />
-                          </IconButton>
-                        </Tooltip>
-                      </Box>
-                    )
-                  }
-                />
-                {classroomStats && (
-                  <CardContent>
-                    <Grid container spacing={2}>
-                      <Grid item xs={6} sm={3}>
-                        <Box textAlign="center">
-                          <Typography variant="h4" color="primary">{classroomStats.totalStudents}</Typography>
-                          <Typography variant="body2" color="textSecondary">Students</Typography>
-                        </Box>
-                      </Grid>
-                      <Grid item xs={6} sm={3}>
-                        <Box textAlign="center">
-                          <Typography variant="h4" color="secondary">{classroomStats.totalAnnouncements}</Typography>
-                          <Typography variant="body2" color="textSecondary">Announcements</Typography>
-                        </Box>
-                      </Grid>
-                      <Grid item xs={6} sm={3}>
-                        <Box textAlign="center">
-                          <Typography variant="h4" color="success.main">{classroomStats.totalResources}</Typography>
-                          <Typography variant="body2" color="textSecondary">Resources</Typography>
-                        </Box>
-                      </Grid>
-                      <Grid item xs={6} sm={3}>
-                        <Box textAlign="center">
-                          <Typography variant="h4" color="warning.main">{classroomStats.attendancePercentage}%</Typography>
-                          <Typography variant="body2" color="textSecondary">Attendance</Typography>
-                        </Box>
-                      </Grid>
-                    </Grid>
-                  </CardContent>
+              {/* Classroom Header with Description */}
+              <Card sx={{ mb: 2, p: 2 }}>
+                <Typography variant="h6" gutterBottom>
+                  {selectedClassroom.course_code} - {selectedClassroom.course_name}
+                </Typography>
+                <Typography variant="body2" color="textSecondary" sx={{ mb: 1 }}>
+                  {selectedClassroom.batch}{selectedClassroom.section ? ' ' + selectedClassroom.section : ''} • {selectedClassroom.semester}
+                </Typography>
+                {selectedClassroom.description && (
+                  <Typography variant="body1" sx={{ mb: 2 }}>
+                    {selectedClassroom.description}
+                  </Typography>
                 )}
+                <Chip
+                  label={isTeacher ? "Teaching" : "Enrolled"}
+                  color={isTeacher ? "primary" : "success"}
+                  size="small"
+                />
               </Card>
 
 {tab === 0 && (
@@ -568,7 +606,7 @@ export default function SmartClassrooms() {
                 </div>
               )}
 
-              {tab === 1 && (
+              {tab === 1 && isTeacher && (
                 <Card sx={{ p: 2 }}>
                   <Typography variant="h6" gutterBottom>Classwork & Resources</Typography>
                   {isTeacher && (
@@ -634,7 +672,7 @@ export default function SmartClassrooms() {
                 </Card>
               )}
 
-              {tab === 2 && (
+              {tab === 2 && isTeacher && (
                 <Card sx={{ p: 2 }}>
                   <Typography variant="h6" sx={{ mb: 2 }}>Attendance — {attendanceDate}</Typography>
                   <TextField
@@ -767,7 +805,7 @@ export default function SmartClassrooms() {
                 </Card>
               )}
 
-              {tab === 4 && (
+              {tab === 4 && isTeacher && (
                 <Card sx={{ p: 2 }}>
                   <Typography variant="h6" sx={{ mb: 2 }}>Marks</Typography>
                   {isTeacher && (
@@ -840,7 +878,7 @@ export default function SmartClassrooms() {
                 </Card>
               )}
 
-              {tab === 3 && (
+              {tab === (isTeacher ? 3 : 1) && (
                 <Card sx={{ p: 2 }}>
                   <Typography variant="h6">Students ({students.length})</Typography>
                   <Divider sx={{ my: 1 }} />
@@ -872,40 +910,5 @@ export default function SmartClassrooms() {
 
       {loading && <LinearProgress sx={{ mt: 2 }} />}
     </Box>
-
-    {/* Edit Classroom Dialog */}
-    <Dialog open={editDialog} onClose={() => setEditDialog(false)} maxWidth="sm" fullWidth>
-      <DialogTitle>Edit Classroom</DialogTitle>
-      <DialogContent>
-        <TextField
-          label="Course Code" fullWidth value={editForm.course_code}
-          onChange={(e) => setEditForm(prev => ({ ...prev, course_code: e.target.value }))} sx={{ mb: 2, mt: 1 }}
-        />
-        <TextField
-          label="Course Name" fullWidth value={editForm.course_name}
-          onChange={(e) => setEditForm(prev => ({ ...prev, course_name: e.target.value }))} sx={{ mb: 2 }}
-        />
-        <TextField
-          label="Course Description" fullWidth multiline rows={2} value={editForm.description}
-          onChange={(e) => setEditForm(prev => ({ ...prev, description: e.target.value }))} sx={{ mb: 2 }}
-        />
-        <TextField
-          label="Batch" fullWidth value={editForm.batch}
-          onChange={(e) => setEditForm(prev => ({ ...prev, batch: e.target.value }))} sx={{ mb: 2 }}
-        />
-        <TextField
-          label="Section" fullWidth value={editForm.section}
-          onChange={(e) => setEditForm(prev => ({ ...prev, section: e.target.value }))} sx={{ mb: 2 }}
-        />
-        <TextField
-          label="Semester" fullWidth value={editForm.semester}
-          onChange={(e) => setEditForm(prev => ({ ...prev, semester: e.target.value }))} sx={{ mb: 2 }}
-        />
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={() => setEditDialog(false)}>Cancel</Button>
-        <Button onClick={handleEditClassroom} variant="contained">Update</Button>
-      </DialogActions>
-    </Dialog>
   );
 }
