@@ -4,14 +4,15 @@ import {
   Box, Card, CardContent, Grid, Typography, TextField, Button,
   Select, MenuItem, FormControl, InputLabel, Tabs, Tab,
   Table, TableHead, TableRow, TableCell, TableBody, LinearProgress,
-  Alert, Divider, CardHeader, Chip, Checkbox
+  Alert, Divider, CardHeader, Chip, Checkbox, Dialog, DialogTitle,
+  DialogContent, DialogActions, IconButton, Tooltip
 } from '@mui/material';
-import { Add, UploadFile, People, Checklist, BarChart } from '@mui/icons-material';
+import { Add, UploadFile, People, Checklist, BarChart, Edit, Delete, Info } from '@mui/icons-material';
 import { useAuth } from '../../context/AuthContext';
 import { classroomService } from '../../services/api';
 import { toast } from 'react-toastify';
 
-const initialForm = { course_code: '', course_name: '', batch: '', section: '', semester: '' };
+const initialForm = { course_code: '', course_name: '', description: '', batch: '', section: '', semester: '' };
 
 export default function SmartClassrooms() {
   const { user, isAuthenticated } = useAuth();
@@ -37,6 +38,12 @@ export default function SmartClassrooms() {
   const [selectedStudents, setSelectedStudents] = useState(new Set());
   const [touchTableRef, setTouchTableRef] = useState(null);
   const [touchStartX, setTouchStartX] = useState(0);
+
+  // New state for editing and stats
+  const [editDialog, setEditDialog] = useState(false);
+  const [editForm, setEditForm] = useState(initialForm);
+  const [classroomStats, setClassroomStats] = useState(null);
+  const [canEdit, setCanEdit] = useState(false);
 
   useEffect(() => {
     if (isAuthenticated && user) {
@@ -108,8 +115,17 @@ export default function SmartClassrooms() {
 
   const fetchClassroomDetails = async () => {
     try {
-      const res = await classroomService.getClassroom(selectedId);
-      setSelectedClassroom(res.data.classroom);
+      const [classroomRes, statsRes] = await Promise.all([
+        classroomService.getClassroom(selectedId),
+        classroomService.getClassroomStats(selectedId)
+      ]);
+      setSelectedClassroom(classroomRes.data.classroom);
+      setClassroomStats(statsRes.data.stats);
+      
+      // Check if user can edit (teacher of this classroom or admin)
+      const canEditClassroom = user.role === 'admin' || 
+        (user.role === 'teacher' && classroomRes.data.classroom.teacher_id === user.id);
+      setCanEdit(canEditClassroom);
     } catch (err) {
       toast.error(err.message || 'Could not load classroom details.');
     }
@@ -176,6 +192,48 @@ export default function SmartClassrooms() {
       fetchClassrooms();
     } catch (err) {
       toast.error(err.message || 'Failed to create classroom.');
+    }
+  };
+
+  const handleEditClassroom = async () => {
+    if (!editForm.course_code || !editForm.course_name || !editForm.batch || !editForm.section || !editForm.semester) {
+      return toast.warn('Please fill all fields.');
+    }
+    try {
+      await classroomService.editClassroom(selectedId, editForm);
+      toast.success('Classroom updated.');
+      setEditDialog(false);
+      fetchClassroomDetails();
+      fetchClassrooms();
+    } catch (err) {
+      toast.error(err.message || 'Failed to update classroom.');
+    }
+  };
+
+  const handleDeleteClassroom = async () => {
+    if (!window.confirm('Are you sure you want to delete this classroom? This action cannot be undone.')) return;
+    try {
+      await classroomService.deleteClassroom(selectedId);
+      toast.success('Classroom deleted.');
+      setSelectedId(null);
+      setSelectedClassroom(null);
+      fetchClassrooms();
+    } catch (err) {
+      toast.error(err.message || 'Failed to delete classroom.');
+    }
+  };
+
+  const openEditDialog = () => {
+    if (selectedClassroom) {
+      setEditForm({
+        course_code: selectedClassroom.course_code,
+        course_name: selectedClassroom.course_name,
+        description: selectedClassroom.description || '',
+        batch: selectedClassroom.batch,
+        section: selectedClassroom.section,
+        semester: selectedClassroom.semester,
+      });
+      setEditDialog(true);
     }
   };
 
@@ -311,6 +369,10 @@ export default function SmartClassrooms() {
                     onChange={(e) => setCreateForm(prev => ({ ...prev, course_name: e.target.value }))} sx={{ mb: 1 }}
                   />
                   <TextField
+                    label="Course Description" fullWidth multiline rows={2} value={createForm.description}
+                    onChange={(e) => setCreateForm(prev => ({ ...prev, description: e.target.value }))} sx={{ mb: 1 }}
+                  />
+                  <TextField
                     label="Batch" fullWidth value={createForm.batch}
                     onChange={(e) => setCreateForm(prev => ({ ...prev, batch: e.target.value }))} sx={{ mb: 1 }}
                   />
@@ -365,6 +427,71 @@ export default function SmartClassrooms() {
             </Box>
           ) : (
             <>
+              {/* Classroom Header with Stats and Actions */}
+              <Card sx={{ mb: 2 }}>
+                <CardHeader
+                  title={
+                    <Box>
+                      <Typography variant="h5">{selectedClassroom.course_code} - {selectedClassroom.course_name}</Typography>
+                      <Typography variant="body2" color="textSecondary">
+                        {selectedClassroom.batch}{selectedClassroom.section && ` ${selectedClassroom.section}`} - {selectedClassroom.semester}
+                      </Typography>
+                      {selectedClassroom.description && (
+                        <Typography variant="body1" sx={{ mt: 1 }}>
+                          {selectedClassroom.description}
+                        </Typography>
+                      )}
+                    </Box>
+                  }
+                  action={
+                    canEdit && (
+                      <Box sx={{ display: 'flex', gap: 1 }}>
+                        <Tooltip title="Edit Classroom">
+                          <IconButton onClick={openEditDialog} color="primary">
+                            <Edit />
+                          </IconButton>
+                        </Tooltip>
+                        <Tooltip title="Delete Classroom">
+                          <IconButton onClick={handleDeleteClassroom} color="error">
+                            <Delete />
+                          </IconButton>
+                        </Tooltip>
+                      </Box>
+                    )
+                  }
+                />
+                {classroomStats && (
+                  <CardContent>
+                    <Grid container spacing={2}>
+                      <Grid item xs={6} sm={3}>
+                        <Box textAlign="center">
+                          <Typography variant="h4" color="primary">{classroomStats.totalStudents}</Typography>
+                          <Typography variant="body2" color="textSecondary">Students</Typography>
+                        </Box>
+                      </Grid>
+                      <Grid item xs={6} sm={3}>
+                        <Box textAlign="center">
+                          <Typography variant="h4" color="secondary">{classroomStats.totalAnnouncements}</Typography>
+                          <Typography variant="body2" color="textSecondary">Announcements</Typography>
+                        </Box>
+                      </Grid>
+                      <Grid item xs={6} sm={3}>
+                        <Box textAlign="center">
+                          <Typography variant="h4" color="success.main">{classroomStats.totalResources}</Typography>
+                          <Typography variant="body2" color="textSecondary">Resources</Typography>
+                        </Box>
+                      </Grid>
+                      <Grid item xs={6} sm={3}>
+                        <Box textAlign="center">
+                          <Typography variant="h4" color="warning.main">{classroomStats.attendancePercentage}%</Typography>
+                          <Typography variant="body2" color="textSecondary">Attendance</Typography>
+                        </Box>
+                      </Grid>
+                    </Grid>
+                  </CardContent>
+                )}
+              </Card>
+
 {tab === 0 && (
                 <div>
                   <Card sx={{ p: 2 }}>
@@ -745,5 +872,40 @@ export default function SmartClassrooms() {
 
       {loading && <LinearProgress sx={{ mt: 2 }} />}
     </Box>
+
+    {/* Edit Classroom Dialog */}
+    <Dialog open={editDialog} onClose={() => setEditDialog(false)} maxWidth="sm" fullWidth>
+      <DialogTitle>Edit Classroom</DialogTitle>
+      <DialogContent>
+        <TextField
+          label="Course Code" fullWidth value={editForm.course_code}
+          onChange={(e) => setEditForm(prev => ({ ...prev, course_code: e.target.value }))} sx={{ mb: 2, mt: 1 }}
+        />
+        <TextField
+          label="Course Name" fullWidth value={editForm.course_name}
+          onChange={(e) => setEditForm(prev => ({ ...prev, course_name: e.target.value }))} sx={{ mb: 2 }}
+        />
+        <TextField
+          label="Course Description" fullWidth multiline rows={2} value={editForm.description}
+          onChange={(e) => setEditForm(prev => ({ ...prev, description: e.target.value }))} sx={{ mb: 2 }}
+        />
+        <TextField
+          label="Batch" fullWidth value={editForm.batch}
+          onChange={(e) => setEditForm(prev => ({ ...prev, batch: e.target.value }))} sx={{ mb: 2 }}
+        />
+        <TextField
+          label="Section" fullWidth value={editForm.section}
+          onChange={(e) => setEditForm(prev => ({ ...prev, section: e.target.value }))} sx={{ mb: 2 }}
+        />
+        <TextField
+          label="Semester" fullWidth value={editForm.semester}
+          onChange={(e) => setEditForm(prev => ({ ...prev, semester: e.target.value }))} sx={{ mb: 2 }}
+        />
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={() => setEditDialog(false)}>Cancel</Button>
+        <Button onClick={handleEditClassroom} variant="contained">Update</Button>
+      </DialogActions>
+    </Dialog>
   );
 }

@@ -12,7 +12,7 @@ function computeAttendanceStats(attendanceRows) {
 
 exports.createClassroom = async (req, res) => {
   try {
-    const { course_code, course_name, batch, section, semester } = req.body;
+    const { course_code, course_name, description, batch, section, semester } = req.body;
     if (!course_code || !course_name || !batch || !section || !semester) {
       return res.status(400).json({ success: false, message: 'Missing required fields.' });
     }
@@ -26,9 +26,9 @@ exports.createClassroom = async (req, res) => {
     }
 
     const rows = await db.query(
-      `INSERT INTO classrooms (course_code, course_name, teacher_id, batch, section, semester)
-       VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
-      [course_code, course_name, req.user.id, batch, section, semester]
+      `INSERT INTO classrooms (course_code, course_name, description, teacher_id, batch, section, semester)
+       VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
+      [course_code, course_name, description || '', req.user.id, batch, section, semester]
     );
 
     res.status(201).json({ success: true, classroom: rows[0] });
@@ -416,6 +416,118 @@ exports.listResources = async (req, res) => {
       [classroom_id]
     );
     res.json({ success: true, resources: rows });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// Helper function to check classroom permissions
+function checkClassroomPermission(classroom, user) {
+  if (user.role === 'admin') return true;
+  if (user.role === 'teacher' && classroom.teacher_id === user.id) return true;
+  return false;
+}
+
+// Edit classroom details (only by teacher or admin)
+exports.editClassroom = async (req, res) => {
+  try {
+    const classroom_id = parseInt(req.params.id, 10);
+    const { course_code, course_name, description, batch, section, semester } = req.body;
+
+    const classroom = await db.queryOne('SELECT * FROM classrooms WHERE id=$1', [classroom_id]);
+    if (!classroom) return res.status(404).json({ success: false, message: 'Classroom not found.' });
+
+    if (!checkClassroomPermission(classroom, req.user)) {
+      return res.status(403).json({ success: false, message: 'Only classroom teacher or admin can edit classroom details.' });
+    }
+
+    const rows = await db.query(
+      `UPDATE classrooms SET
+        course_code = COALESCE($1, course_code),
+        course_name = COALESCE($2, course_name),
+        description = COALESCE($3, description),
+        batch = COALESCE($4, batch),
+        section = COALESCE($5, section),
+        semester = COALESCE($6, semester),
+        updated_at = NOW()
+       WHERE id = $7 RETURNING *`,
+      [course_code, course_name, description, batch, section, semester, classroom_id]
+    );
+
+    res.json({ success: true, classroom: rows[0] });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// Delete classroom (only by teacher or admin)
+exports.deleteClassroom = async (req, res) => {
+  try {
+    const classroom_id = parseInt(req.params.id, 10);
+
+    const classroom = await db.queryOne('SELECT * FROM classrooms WHERE id=$1', [classroom_id]);
+    if (!classroom) return res.status(404).json({ success: false, message: 'Classroom not found.' });
+
+    if (!checkClassroomPermission(classroom, req.user)) {
+      return res.status(403).json({ success: false, message: 'Only classroom teacher or admin can delete classroom.' });
+    }
+
+    await db.query('DELETE FROM classrooms WHERE id = $1', [classroom_id]);
+    res.json({ success: true, message: 'Classroom deleted successfully.' });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// Get classroom stats (viewable by all enrolled users)
+exports.getClassroomStats = async (req, res) => {
+  try {
+    const classroom_id = parseInt(req.params.id, 10);
+
+    const classroom = await db.queryOne('SELECT * FROM classrooms WHERE id=$1', [classroom_id]);
+    if (!classroom) return res.status(404).json({ success: false, message: 'Classroom not found.' });
+
+    // Check if user has access (enrolled student, teacher, or admin)
+    if (req.user.role === 'student') {
+      const enrolled = await db.queryOne(
+        'SELECT 1 FROM classroom_students WHERE classroom_id=$1 AND student_id=$2',
+        [classroom_id, req.user.id]
+      );
+      if (!enrolled) return res.status(403).json({ success: false, message: 'Access denied.' });
+    } else if (req.user.role === 'teacher' && classroom.teacher_id !== req.user.id) {
+      return res.status(403).json({ success: false, message: 'Access denied.' });
+    }
+
+    // Get stats
+    const [studentCount, announcementCount, resourceCount, attendanceStats] = await Promise.all([
+      db.query(`SELECT COUNT(*)::int as count FROM classroom_students WHERE classroom_id=$1`, [classroom_id]).then(r => r[0].count),
+      db.query(`SELECT COUNT(*)::int as count FROM classroom_announcements WHERE classroom_id=$1`, [classroom_id]).then(r => r[0].count),
+      db.query(`SELECT COUNT(*)::int as count FROM classroom_resources WHERE classroom_id=$1`, [classroom_id]).then(r => r[0].count),
+      db.query(`
+        SELECT
+          COUNT(*)::int as total_classes,
+          COUNT(CASE WHEN status='present' THEN 1 END)::int as total_present,
+          COUNT(CASE WHEN status='absent' THEN 1 END)::int as total_absent
+        FROM classroom_attendance WHERE classroom_id=$1
+      `, [classroom_id]).then(r => r[0])
+    ]);
+
+    const attendancePercentage = attendanceStats.total_classes > 0
+      ? Math.round((attendanceStats.total_present / attendanceStats.total_classes) * 100)
+      : 0;
+
+    res.json({
+      success: true,
+      stats: {
+        totalStudents: studentCount,
+        totalAnnouncements: announcementCount,
+        totalResources: resourceCount,
+        totalClasses: attendanceStats.total_classes,
+        totalPresent: attendanceStats.total_present,
+        totalAbsent: attendanceStats.total_absent,
+        attendancePercentage
+      }
+    });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }

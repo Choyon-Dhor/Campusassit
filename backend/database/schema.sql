@@ -67,6 +67,7 @@ CREATE TABLE IF NOT EXISTS classrooms (
   id          SERIAL PRIMARY KEY,
   course_code VARCHAR(50)  NOT NULL,
   course_name VARCHAR(255) NOT NULL,
+  description TEXT,
   teacher_id  INTEGER      NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   batch       VARCHAR(20)  NOT NULL,
   section     VARCHAR(20)  NOT NULL,
