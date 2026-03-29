@@ -251,26 +251,33 @@ exports.notification = {
 exports.dashboardStats = async (req, res) => {
   try {
     const userId = req.user.id;
+    console.log('[dashboardStats] Starting for user:', userId);
+    
     const [users, anns, ress, groups, upcoming, unread] = await Promise.all([
-      db.queryOne(`SELECT COUNT(*)::int AS c FROM users WHERE is_active = TRUE`),
-      db.queryOne(`SELECT COUNT(*)::int AS c FROM announcements`),
-      db.queryOne(`SELECT COUNT(*)::int AS c FROM resources`),
-      db.queryOne(`SELECT COUNT(*)::int AS c FROM study_groups`),
+      db.query(`SELECT COUNT(*)::int AS c FROM users WHERE is_active = TRUE`).then(r => r[0]),
+      db.query(`SELECT COUNT(*)::int AS c FROM announcements`).then(r => r[0]),
+      db.query(`SELECT COUNT(*)::int AS c FROM resources`).then(r => r[0]),
+      db.query(`SELECT COUNT(*)::int AS c FROM study_groups`).then(r => r[0]),
       deadlineRepo.getUpcoming(userId, 7),
       notificationService.getUnreadCount(userId),
     ]);
 
+    console.log('[dashboardStats] Data loaded:', { users, anns, ress, groups, upcoming: upcoming?.length, unread });
+
     res.json({
       success: true,
       stats: {
-        totalUsers:           users.c,
-        totalAnnouncements:   anns.c,
-        totalResources:       ress.c,
-        totalStudyGroups:     groups.c,
-        upcomingDeadlines:    upcoming.length,
-        unreadNotifications:  unread,
+        totalUsers:           users?.c || 0,
+        totalAnnouncements:   anns?.c || 0,
+        totalResources:       ress?.c || 0,
+        totalStudyGroups:     groups?.c || 0,
+        upcomingDeadlines:    upcoming?.length || 0,
+        unreadNotifications:  unread || 0,
       },
-      upcomingDeadlines: upcoming,
+      upcomingDeadlines: upcoming || [],
     });
-  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+  } catch (err) { 
+    console.error('[dashboardStats] Error:', err);
+    res.status(500).json({ success: false, message: err.message }); 
+  }
 };

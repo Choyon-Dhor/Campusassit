@@ -7,7 +7,10 @@ import { authService } from '../services/api';
 const AuthContext = createContext(null);
 
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null);
+  const [user, setUser] = useState(() => {
+    const saved = localStorage.getItem('campusassist_user');
+    try { return saved ? JSON.parse(saved) : null; } catch { return null; }
+  });
   const [loading, setLoading] = useState(true);
   const [token, setToken] = useState(localStorage.getItem('campusassist_token'));
 
@@ -43,6 +46,7 @@ export const AuthProvider = ({ children }) => {
     const res = await authService.register(data);
     const { token: newToken, user: newUser } = res.data;
     localStorage.setItem('campusassist_token', newToken);
+    localStorage.setItem('campusassist_user', JSON.stringify(newUser));
     setToken(newToken);
     setUser(newUser);
     return newUser;

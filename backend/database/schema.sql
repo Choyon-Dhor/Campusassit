@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS users (
   id          SERIAL PRIMARY KEY,
   name        VARCHAR(100)  NOT NULL,
   email       VARCHAR(100)  NOT NULL UNIQUE,
+  student_number VARCHAR(20),
   password    VARCHAR(255)  NOT NULL,
   role        VARCHAR(20)   NOT NULL DEFAULT 'student'
                 CHECK (role IN ('student','teacher','admin')),
@@ -22,6 +23,9 @@ CREATE TABLE IF NOT EXISTS users (
   created_at  TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
   updated_at  TIMESTAMPTZ   NOT NULL DEFAULT NOW()
 );
+
+-- Add index for student_number lookups
+CREATE INDEX IF NOT EXISTS idx_users_student_number ON users(student_number);
 
 -- ============================================================
 -- ANNOUNCEMENTS
@@ -54,6 +58,72 @@ CREATE TABLE IF NOT EXISTS notifications (
   reference_id INTEGER,
   is_read      BOOLEAN      NOT NULL DEFAULT FALSE,
   created_at   TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+
+-- ============================================================
+-- SMART CLASSROOMS
+-- ============================================================
+CREATE TABLE IF NOT EXISTS classrooms (
+  id          SERIAL PRIMARY KEY,
+  course_code VARCHAR(50)  NOT NULL,
+  course_name VARCHAR(255) NOT NULL,
+  teacher_id  INTEGER      NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  batch       VARCHAR(20)  NOT NULL,
+  section     VARCHAR(20)  NOT NULL,
+  semester    VARCHAR(20)  NOT NULL,
+  created_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+  updated_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS classroom_students (
+  id           SERIAL PRIMARY KEY,
+  classroom_id INTEGER      NOT NULL REFERENCES classrooms(id) ON DELETE CASCADE,
+  student_id   INTEGER      NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  added_at     TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+  CONSTRAINT unique_classroom_student UNIQUE (classroom_id, student_id)
+);
+
+CREATE TABLE IF NOT EXISTS classroom_attendance (
+  id           SERIAL PRIMARY KEY,
+  classroom_id INTEGER      NOT NULL REFERENCES classrooms(id) ON DELETE CASCADE,
+  student_id   INTEGER      NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  date         DATE         NOT NULL,
+  status       VARCHAR(10)  NOT NULL CHECK (status IN ('present','absent')),
+  created_at   TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+  updated_at   TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+  CONSTRAINT unique_attendance_record UNIQUE (classroom_id, student_id, date)
+);
+
+CREATE TABLE IF NOT EXISTS classroom_marks (
+  id             SERIAL PRIMARY KEY,
+  classroom_id   INTEGER      NOT NULL REFERENCES classrooms(id) ON DELETE CASCADE,
+  student_id     INTEGER      NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  title          VARCHAR(255) NOT NULL,
+  marks_obtained NUMERIC(8,2) NOT NULL,
+  total_marks    NUMERIC(8,2) NOT NULL,
+  date           DATE         NOT NULL,
+  created_at     TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+  updated_at     TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS classroom_announcements (
+  id           SERIAL PRIMARY KEY,
+  classroom_id INTEGER      NOT NULL REFERENCES classrooms(id) ON DELETE CASCADE,
+  title        VARCHAR(255) NOT NULL,
+  content      TEXT         NOT NULL,
+  author_id    INTEGER      NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at   TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+  updated_at   TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS classroom_resources (
+  id           SERIAL PRIMARY KEY,
+  classroom_id INTEGER      NOT NULL REFERENCES classrooms(id) ON DELETE CASCADE,
+  title        VARCHAR(255) NOT NULL,
+  file_url     VARCHAR(500) NOT NULL,
+  uploader_id  INTEGER      NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at   TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+  updated_at   TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
 
 -- ============================================================
@@ -217,6 +287,12 @@ CREATE INDEX IF NOT EXISTS idx_resources_score    ON resources(recommendation_sc
 CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, is_read);
 CREATE INDEX IF NOT EXISTS idx_deadlines_date     ON deadlines(deadline_date);
 CREATE INDEX IF NOT EXISTS idx_announcements_auth ON announcements(author_id);
+CREATE INDEX IF NOT EXISTS idx_classrooms_teacher ON classrooms(teacher_id);
+CREATE INDEX IF NOT EXISTS idx_classroom_students_classroom ON classroom_students(classroom_id);
+CREATE INDEX IF NOT EXISTS idx_classroom_attendance_student ON classroom_attendance(student_id);
+CREATE INDEX IF NOT EXISTS idx_classroom_marks_student ON classroom_marks(student_id);
+CREATE INDEX IF NOT EXISTS idx_classroom_announcements_classroom ON classroom_announcements(classroom_id);
+CREATE INDEX IF NOT EXISTS idx_classroom_resources_classroom ON classroom_resources(classroom_id);
 
 -- ============================================================
 -- Auto-update updated_at via trigger function

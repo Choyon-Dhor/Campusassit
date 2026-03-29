@@ -119,6 +119,24 @@ Expected output: a series of `CREATE TABLE`, `CREATE INDEX`, `CREATE FUNCTION`, 
 
 ---
 
+## 🧑‍🏫 Smart Classroom Feature Endpoints
+
+- `POST /api/classrooms/create`  - create a new classroom (teacher/admin)
+- `POST /api/classrooms/upload-students` - attach students by student_number or CSV text (teacher/admin)
+- `GET /api/classrooms/list` - get student/teacher classrooms
+- `GET /api/classrooms/:id` - classroom details
+- `GET /api/classrooms/:id/students` - roster
+- `POST /api/classrooms/:id/attendance/mark` - mark attendance (teacher/admin)
+- `GET /api/classrooms/:id/attendance` - student attendance + analytics
+- `POST /api/classrooms/:id/marks/add` - add class test marks (teacher/admin)
+- `GET /api/classrooms/:id/marks` - student marks summary
+- `POST /api/attendance/mark` - alias endpoint
+- `GET /api/attendance/student` - alias endpoint
+- `POST /api/marks/add` - alias endpoint
+- `GET /api/marks/student` - alias endpoint
+
+---
+
 ### Step 3 — Configure the backend
 
 ```bash

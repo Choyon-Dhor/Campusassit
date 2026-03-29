@@ -9,7 +9,7 @@ import {
 } from '@mui/material';
 import {
   Dashboard, Campaign, MeetingRoom, MenuBook, Group,
-  Assignment, EventNote, Notifications, Search,
+  People, Assignment, EventNote, Notifications, Search,
   Menu as MenuIcon, Logout, Person, School,
   CalendarMonth, DirectionsBus, ManageAccounts
 } from '@mui/icons-material';
@@ -28,10 +28,11 @@ const NAV_SECTIONS = [
   {
     label: 'Academic',
     items: [
-      { path: '/routine',       label: 'Class Routine',  icon: <CalendarMonth />, roles: ['student','teacher','admin'] },
-      { path: '/classrooms',    label: 'Free Classrooms',icon: <MeetingRoom />,   roles: ['student','teacher','admin'] },
-      { path: '/results',       label: 'Result Portal',  icon: <School />,        roles: ['student','teacher','admin'] },
-      { path: '/resources',     label: 'Resources',      icon: <MenuBook />,      roles: ['student','teacher','admin'] },
+      { path: '/routine',         label: 'Class Routine',    icon: <CalendarMonth />,  roles: ['student','teacher','admin'] },
+      { path: '/classrooms',      label: 'Free Classrooms',  icon: <MeetingRoom />,    roles: ['student','teacher','admin'] },
+      { path: '/smart-classrooms', label: 'Smart Classroom', icon: <People />,        roles: ['student','teacher','admin'] },
+      { path: '/results',         label: 'Result Portal',    icon: <School />,         roles: ['student','teacher','admin'] },
+      { path: '/resources',       label: 'Resources',        icon: <MenuBook />,       roles: ['student','teacher','admin'] },
     ],
   },
   {
@@ -162,7 +163,7 @@ export default function Layout() {
 
   const fetchNotifications = async () => {
     try {
-      const res = await notificationService.getAll();
+      const res = await notificationService.getAll({ params: {} });
       setNotifications(res.data.notifications || []);
       setUnreadCount(res.data.unreadCount || 0);
     } catch {}

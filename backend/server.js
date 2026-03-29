@@ -1,13 +1,14 @@
 // ============================================================
 // server.js — CampusAssist Main Server Entry Point
 // ============================================================
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '.env') });
+
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
-const path = require('path');
 const rateLimit = require('express-rate-limit');
-require('dotenv').config();
 
 const db = require('./config/database');
 const routes = require('./routes/index');

@@ -12,6 +12,7 @@ const { uploadResource, uploadRoutine, uploadBusSchedule } = require('../middlew
 const authCtrl  = require('../controllers/authController');
 const annCtrl   = require('../controllers/announcementController');
 const classCtrl = require('../controllers/classroomController');
+const smartClassCtrl = require('../controllers/smartClassroomController');
 const {
   studyGroup, deadline, consultation, notification, dashboardStats,
 } = require('../controllers/featureControllers');
@@ -41,13 +42,28 @@ annRouter.delete('/:id',    auth, isTeacherOrAdmin, annCtrl.delete);
 
 // ── Classrooms ────────────────────────────────────────────────
 const classRouter = express.Router();
-classRouter.get('/free',                  auth,           classCtrl.getFreeRooms);
-classRouter.get('/rooms',                 auth,           classCtrl.getAllRooms);
-classRouter.get('/routine',               auth,           classCtrl.getRoutine);
-classRouter.get('/timeslots',             auth,           classCtrl.getTimeSlots);
-classRouter.get('/room/:name/schedule',   auth,           classCtrl.getRoomSchedule);
-classRouter.post('/routine/upload',  auth, isAdmin, uploadRoutine, classCtrl.uploadRoutine);
-classRouter.get('/routine/template', auth, isAdmin,       classCtrl.downloadTemplate);
+// Smart Classroom endpoints - Specific routes must come before wildcard /:id
+classRouter.post('/create',                      auth, isTeacherOrAdmin, smartClassCtrl.createClassroom);
+classRouter.post('/upload-students',             auth, isTeacherOrAdmin, smartClassCtrl.uploadStudents);
+classRouter.get('/list',                         auth, smartClassCtrl.listClassrooms);
+classRouter.get('/free',                         auth,           classCtrl.getFreeRooms);
+classRouter.get('/rooms',                        auth,           classCtrl.getAllRooms);
+classRouter.get('/routine',                      auth,           classCtrl.getRoutine);
+classRouter.get('/timeslots',                    auth,           classCtrl.getTimeSlots);
+classRouter.post('/routine/upload',         auth, isAdmin, uploadRoutine, classCtrl.uploadRoutine);
+classRouter.get('/routine/template',        auth, isAdmin,       classCtrl.downloadTemplate);
+classRouter.get('/room/:name/schedule',          auth,           classCtrl.getRoomSchedule);
+// Wildcard routes must come after specific routes
+classRouter.get('/:id',                          auth, smartClassCtrl.getClassroom);
+classRouter.get('/:id/students',                 auth, smartClassCtrl.getClassroomStudents);
+classRouter.post('/:id/attendance/mark',         auth, isTeacherOrAdmin, smartClassCtrl.markAttendance);
+classRouter.get('/:id/attendance',               auth, smartClassCtrl.getAttendance);
+classRouter.post('/:id/marks/add',               auth, isTeacherOrAdmin, smartClassCtrl.addMarks);
+classRouter.get('/:id/marks',                    auth, smartClassCtrl.getMarks);
+classRouter.post('/:id/announcements',     auth, isTeacherOrAdmin, smartClassCtrl.createAnnouncement);
+classRouter.get('/:id/announcements',      auth, smartClassCtrl.listAnnouncements);
+classRouter.post('/:id/resources',         auth, isTeacherOrAdmin, smartClassCtrl.addResource);
+classRouter.get('/:id/resources',          auth, smartClassCtrl.listResources);
 
 // ── Resources ─────────────────────────────────────────────────
 const resourceRouter = express.Router();
@@ -182,7 +198,11 @@ resultRouter.put('/:id',                    auth, isTeacherOrAdmin, resultCtrl.u
 resultRouter.delete('/:id',                auth, isTeacherOrAdmin, resultCtrl.deleteResult);
 resultRouter.patch('/publish-semester',     auth, isTeacherOrAdmin, resultCtrl.publishSemester);
 resultRouter.patch('/:id/publish',          auth, isAdmin,          resultCtrl.publishResult);
-
+// Shortcut routes matching feature request
+router.post('/attendance/mark', auth, isTeacherOrAdmin, smartClassCtrl.markAttendance);
+router.get('/attendance/student', auth, smartClassCtrl.getAttendance);
+router.post('/marks/add', auth, isTeacherOrAdmin, smartClassCtrl.addMarks);
+router.get('/marks/student', auth, smartClassCtrl.getMarks);
 // ── Bus Schedule ──────────────────────────────────────────────
 const busCtrl   = require('../controllers/busController');
 const busRouter = express.Router();

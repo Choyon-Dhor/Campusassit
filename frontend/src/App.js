@@ -22,6 +22,7 @@ import Profile  from './components/auth/Profile';
 import Dashboard       from './components/dashboard/Dashboard';
 import Announcements   from './components/announcements/Announcements';
 import FreeClassrooms  from './components/classrooms/FreeClassrooms';
+import SmartClassrooms from './components/classrooms/SmartClassrooms';
 import Resources       from './components/resources/Resources';
 import StudyGroups     from './components/studygroups/StudyGroups';
 import Deadlines       from './components/deadlines/Deadlines';
@@ -82,6 +83,7 @@ function AppRoutes() {
         <Route path="dashboard"     element={<Dashboard />} />
         <Route path="announcements" element={<Announcements />} />
         <Route path="classrooms"    element={<FreeClassrooms />} />
+        <Route path="smart-classrooms" element={<SmartClassrooms />} />
         <Route path="resources"     element={<Resources />} />
         <Route path="study-groups"  element={<StudyGroups />} />
         <Route path="deadlines"     element={<Deadlines />} />

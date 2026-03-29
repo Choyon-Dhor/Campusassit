@@ -71,9 +71,24 @@ export const classroomService = {
     headers: { 'Content-Type': 'multipart/form-data' },
   }),
   downloadTemplate: () => api.get('/classrooms/routine/template', { responseType: 'blob' }),
+
+  // Smart Classroom APIs
+  createClassroom: (data) => api.post('/classrooms/create', data),
+  uploadStudents: (data) => api.post('/classrooms/upload-students', data),
+  listClassrooms: () => api.get('/classrooms/list'),
+  getClassroom: (id) => api.get(`/classrooms/${id}`),
+  getClassroomStudents: (id) => api.get(`/classrooms/${id}/students`),
+  markAttendance: (classroomId, data) => api.post(`/classrooms/${classroomId}/attendance/mark`, data),
+  getAttendance: (classroomId, params) => api.get(`/classrooms/${classroomId}/attendance`, { params }),
+  addMarks: (classroomId, data) => api.post(`/classrooms/${classroomId}/marks/add`, data),
+  getMarks: (classroomId, params) => api.get(`/classrooms/${classroomId}/marks`, { params }),
+  createAnnouncement: (classroomId, data) => api.post(`/classrooms/${classroomId}/announcements`, data),
+  listAnnouncements: (classroomId) => api.get(`/classrooms/${classroomId}/announcements`),
+  addResource: (classroomId, data) => api.post(`/classrooms/${classroomId}/resources`, data),
+  listResources: (classroomId) => api.get(`/classrooms/${classroomId}/resources`),
 };
 
-// ── Resources ─────────────────────────────────────────────────
+  // ── Resources ─────────────────────────────────────────────────
 export const resourceService = {
   getAll: (params) => api.get('/resources', { params }),
   getById: (id) => api.get(`/resources/${id}`),

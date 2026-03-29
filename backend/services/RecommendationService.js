@@ -35,10 +35,11 @@ class RecommendationService {
 
   async updateAllScores() {
     try {
-      const resources = await db.query(
+      const res = await db.query(
         `SELECT id, download_count, average_rating, created_at FROM resources`
       );
-      if (resources.length === 0) return;
+      const resources = res.rows;
+      if (!resources || resources.length === 0) return;
 
       const maxDownloads = Math.max(...resources.map(r => r.download_count));
 
@@ -76,18 +77,21 @@ class RecommendationService {
 
     params.push(limit);
     sql += ` ORDER BY r.recommendation_score DESC LIMIT $${params.length}`;
-    return await db.query(sql, params);
+    const res = await db.query(sql, params);
+    return res.rows;
   }
 
   async updateSingleScore(resourceId) {
     try {
-      const r = await db.queryOne(
+      const res = await db.query(
         `SELECT id, download_count, average_rating, created_at FROM resources WHERE id = $1`,
         [resourceId]
       );
+      const r = res.rows[0];
       if (!r) return;
 
-      const maxRow = await db.queryOne(`SELECT MAX(download_count) AS max FROM resources`);
+      const maxRes = await db.query(`SELECT MAX(download_count) AS max FROM resources`);
+      const maxRow = maxRes.rows[0];
       const maxDownloads = maxRow?.max || 1;
 
       const score = this.computeScore(

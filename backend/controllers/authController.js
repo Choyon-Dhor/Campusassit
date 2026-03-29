@@ -119,9 +119,9 @@ exports.updateProfile = async (req, res) => {
   try {
     const { name, department, student_number, batch_number, batch_section } = req.body;
     const payload = { name, department };
-    if (student_number !== undefined) payload.student_number = student_number;
-    if (batch_number   !== undefined) payload.batch_number   = batch_number;
-    if (batch_section  !== undefined) payload.batch_section  = batch_section;
+    if (student_number !== undefined) payload.student_number = student_number || null;
+    if (batch_number   !== undefined) payload.batch_number   = batch_number ? parseInt(batch_number) : null;
+    if (batch_section  !== undefined) payload.batch_section  = batch_section || null;
     await userRepo.update(req.user.id, payload);
     const updated = await userRepo.findById(req.user.id);
     const { password, ...safeUser } = updated;
@@ -213,36 +213,4 @@ exports.adminToggleUser = async (req, res) => {
   }
 };
 
-// PATCH /api/auth/users/:id/toggle-active  — admin only
-exports.toggleUserActive = async (req, res) => {
-  try {
-    const targetUser = await userRepo.findById(req.params.id);
-    if (!targetUser) return res.status(404).json({ success: false, message: 'User not found.' });
-    if (targetUser.id === req.user.id) {
-      return res.status(400).json({ success: false, message: 'You cannot deactivate your own account.' });
-    }
-    const updated = await userRepo.update(req.params.id, { is_active: !targetUser.is_active });
-    const action = updated.is_active ? 'activated' : 'deactivated';
-    res.json({ success: true, message: `User ${action} successfully.`, user: updated });
-  } catch (err) {
-    res.status(500).json({ success: false, message: 'Server error.' });
-  }
-};
 
-// PUT /api/auth/users/:id  — admin can update role/department
-exports.updateUser = async (req, res) => {
-  try {
-    const { name, role, department, student_number, batch_number, batch_section } = req.body;
-    const payload = {};
-    if (name)           payload.name           = name;
-    if (role)           payload.role           = role;
-    if (department)     payload.department     = department;
-    if (student_number !== undefined) payload.student_number = student_number;
-    if (batch_number   !== undefined) payload.batch_number   = batch_number   ? parseInt(batch_number) : null;
-    if (batch_section  !== undefined) payload.batch_section  = batch_section  || null;
-    const updated = await userRepo.update(req.params.id, payload);
-    res.json({ success: true, message: 'User updated.', user: updated });
-  } catch (err) {
-    res.status(500).json({ success: false, message: 'Server error.' });
-  }
-};
