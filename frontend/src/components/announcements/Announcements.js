@@ -78,7 +78,7 @@ export default function Announcements() {
     } catch (err) { toast.error(err.message); }
   };
 
-  const canManage = (ann) => isAdmin || ann.author_id === user?.id;
+  const canManage = (ann) => !ann.is_readonly && (isAdmin || ann.author_id === user?.id);
 
   return (
     <div className="fade-in">
@@ -112,6 +112,9 @@ export default function Announcements() {
                     <h6 style={{ margin: 0, fontWeight: 600, fontSize: 15 }}>{ann.title}</h6>
                     <Chip label={ann.category} size="small"
                       sx={{ height: 20, fontSize: 10, bgcolor: catStyle.bg, color: catStyle.color, fontWeight: 600 }} />
+                    {ann.classroom_label && (
+                      <Chip label={ann.classroom_label} size="small" variant="outlined" sx={{ height: 20, fontSize: 10 }} />
+                    )}
                     {ann.target_role !== 'all' && (
                       <Chip label={ann.target_role} size="small" variant="outlined" sx={{ height: 20, fontSize: 10 }} />
                     )}

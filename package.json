@@ -1,11 +1,14 @@
 {
   "name": "campusassist",
   "version": "1.0.0",
-  "description": "CampusAssist – Smart Academic Management & Collaboration Platform",
+  "description": "CampusAssist - Smart Academic Management & Collaboration Platform",
   "scripts": {
     "backend": "cd backend && npm run dev",
     "frontend": "cd frontend && npm start",
+    "test": "cd backend && npm test",
+    "test:backend": "cd backend && npm test",
+    "build": "cd frontend && npm run build",
     "install:all": "cd backend && npm install && cd ../frontend && npm install",
-    "setup": "npm run install:all && echo '\\n✅ Run: mysql -u root -p campusassist < backend/database/schema.sql\\nThen update backend/.env with your DB password\\nThen run: npm run backend (terminal 1) && npm run frontend (terminal 2)'"
+    "setup": "npm run install:all && echo '\\nSetup database with: psql -U postgres -d campusassist -f backend/database/schema.sql\\nThen update backend/.env with your PostgreSQL password\\nThen run: npm run backend (terminal 1) && npm run frontend (terminal 2)'"
   }
 }

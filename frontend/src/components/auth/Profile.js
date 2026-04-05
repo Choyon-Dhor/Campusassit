@@ -22,7 +22,7 @@ const DEPARTMENTS = [
 
 const BATCHES   = [57, 58, 59, 60, 61, 62, 63, 64, 65];
 const SECTIONS  = ['A','B','C','D','E','F','G','H','I',
-                   'A+B','B+I','C+G','D+H','E+F','A+F','D+G','I+J','E+F+G'];
+                   'A+B','B+I','C+G','D+H','E+F','A+F','D+G','I+J'];
 
 const roleColor  = { admin: '#ea4335', teacher: '#34a853', student: '#1a73e8' };
 const roleLabels = { admin: '🛡️ Admin', teacher: '👨‍🏫 Teacher', student: '🎓 Student' };

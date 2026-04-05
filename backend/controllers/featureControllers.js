@@ -8,12 +8,38 @@ const {
 const notificationService  = require('../services/NotificationService');
 const recommendationService = require('../services/RecommendationService');
 
+const isOptionalStudyGroupSchemaError = (err) =>
+  err && ['42P01', '42703'].includes(err.code);
+
+const getStudyGroupFeatureUnavailableMessage = (err) => {
+  const relation = err?.message?.match(/relation "([^"]+)"/i)?.[1] || '';
+
+  if (relation.includes('study_group_messages') || relation.includes('study_group_message')) {
+    return 'Study group chat is unavailable until the database update is applied.';
+  }
+
+  if (relation.includes('study_group_announcement')) {
+    return 'Study group announcements are unavailable until the database update is applied.';
+  }
+
+  if (relation.includes('study_group_resource')) {
+    return 'Study group resources are unavailable until the database update is applied.';
+  }
+
+  if (relation.includes('study_group_activit')) {
+    return 'Study group activity is unavailable until the database update is applied.';
+  }
+
+  return 'This study group feature is unavailable until the database update is applied.';
+};
+
 // ============================================================
 // Study Groups
 // ============================================================
 exports.studyGroup = {
   getAll: async (req, res) => {
     try {
+      await studyGroupRepo.touchUserActivity(req.user.id);
       const groups = await studyGroupRepo.findWithDetails(req.user.id);
       res.json({ success: true, groups });
     } catch (err) { res.status(500).json({ success: false, message: err.message }); }
@@ -30,6 +56,7 @@ exports.studyGroup = {
         creator_id: req.user.id, max_members, is_private, meeting_schedule,
       });
       await studyGroupRepo.joinGroup(group.id, req.user.id, 'creator');
+      await studyGroupRepo.touchUserActivity(req.user.id);
       res.status(201).json({ success: true, group });
     } catch (err) { res.status(500).json({ success: false, message: err.message }); }
   },
@@ -46,7 +73,9 @@ exports.studyGroup = {
         return res.status(400).json({ success: false, message: 'Group is full.' });
 
       await studyGroupRepo.joinGroup(req.params.id, req.user.id);
+      await studyGroupRepo.addActivity(req.params.id, req.user.id, 'member_joined', { user_name: req.user.name });
       await notificationService.notifyStudyGroupInvite(group, req.user.id);
+      await studyGroupRepo.touchUserActivity(req.user.id);
       res.json({ success: true, message: 'Joined group successfully.' });
     } catch (err) { res.status(500).json({ success: false, message: err.message }); }
   },
@@ -54,14 +83,28 @@ exports.studyGroup = {
   leave: async (req, res) => {
     try {
       await studyGroupRepo.leaveGroup(req.params.id, req.user.id);
+      await studyGroupRepo.addActivity(req.params.id, req.user.id, 'member_left', { user_name: req.user.name });
+      await studyGroupRepo.touchUserActivity(req.user.id);
       res.json({ success: true, message: 'Left group.' });
     } catch (err) { res.status(500).json({ success: false, message: err.message }); }
   },
 
   getMembers: async (req, res) => {
     try {
+      await studyGroupRepo.touchUserActivity(req.user.id);
       const members = await studyGroupRepo.getMembers(req.params.id);
       res.json({ success: true, members });
+    } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+  },
+
+  getOne: async (req, res) => {
+    try {
+      const group = await studyGroupRepo.findById(req.params.id, req.user.id);
+      if (!group) return res.status(404).json({ success: false, message: 'Group not found.' });
+      if (group.is_private && !group.is_member && group.creator_id !== req.user.id)
+        return res.status(403).json({ success: false, message: 'This group is private.' });
+      await studyGroupRepo.touchUserActivity(req.user.id);
+      res.json({ success: true, group });
     } catch (err) { res.status(500).json({ success: false, message: err.message }); }
   },
 
@@ -72,8 +115,280 @@ exports.studyGroup = {
       if (group.creator_id !== req.user.id && req.user.role !== 'admin')
         return res.status(403).json({ success: false, message: 'Permission denied.' });
       await studyGroupRepo.delete(req.params.id);
+      await studyGroupRepo.addActivity(req.params.id, req.user.id, 'group_deleted', { group_name: group.name });
       res.json({ success: true, message: 'Group deleted.' });
     } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+  },
+
+  getMessages: async (req, res) => {
+    try {
+      if (!await studyGroupRepo.isMember(req.params.id, req.user.id))
+        return res.status(403).json({ success: false, message: 'Permission denied.' });
+      await studyGroupRepo.touchUserActivity(req.user.id);
+      await studyGroupRepo.markMessagesRead(req.params.id, req.user.id);
+      const messages = await studyGroupRepo.getMessagesDetailed(req.params.id, req.user.id, req.query.q || '');
+      const typing = await studyGroupRepo.getTypingUsers(req.params.id, req.user.id);
+      res.json({ success: true, messages, typing });
+    } catch (err) {
+      if (isOptionalStudyGroupSchemaError(err)) {
+        return res.json({ success: true, messages: [], typing: [] });
+      }
+      res.status(500).json({ success: false, message: err.message });
+    }
+  },
+
+  postMessage: async (req, res) => {
+    try {
+      const { message, message_type, attachment_url, attachment_name, metadata } = req.body;
+      if (!message || !message.trim())
+        return res.status(400).json({ success: false, message: 'Message is required.' });
+      if (!await studyGroupRepo.isMember(req.params.id, req.user.id))
+        return res.status(403).json({ success: false, message: 'Permission denied.' });
+
+      const newMsg = (await studyGroupRepo.addMessage(req.params.id, req.user.id, message.trim(), {
+        message_type: message_type || 'text',
+        attachment_url: attachment_url || null,
+        attachment_name: attachment_name || null,
+        metadata: metadata || {},
+      }))[0];
+      await studyGroupRepo.setTypingStatus(req.params.id, req.user.id, false);
+      await studyGroupRepo.touchUserActivity(req.user.id);
+      await studyGroupRepo.addActivity(req.params.id, req.user.id, 'message_posted', {
+        preview: message.trim().substring(0, 80),
+        message_type: message_type || 'text',
+      });
+      res.status(201).json({ success: true, message: newMsg });
+    } catch (err) {
+      if (isOptionalStudyGroupSchemaError(err)) {
+        return res.status(503).json({
+          success: false,
+          message: getStudyGroupFeatureUnavailableMessage(err),
+        });
+      }
+      res.status(500).json({ success: false, message: err.message });
+    }
+  },
+
+  reactToMessage: async (req, res) => {
+    try {
+      const { reaction } = req.body;
+      if (!reaction) return res.status(400).json({ success: false, message: 'Reaction is required.' });
+      if (!await studyGroupRepo.isMember(req.params.id, req.user.id))
+        return res.status(403).json({ success: false, message: 'Permission denied.' });
+
+      const message = await studyGroupRepo.findMessageById(req.params.messageId);
+      if (!message || Number(message.group_id) !== Number(req.params.id))
+        return res.status(404).json({ success: false, message: 'Message not found.' });
+
+      const result = await studyGroupRepo.toggleMessageReaction(req.params.messageId, req.user.id, reaction);
+      await studyGroupRepo.touchUserActivity(req.user.id);
+      const messages = await studyGroupRepo.getMessagesDetailed(req.params.id, req.user.id);
+      const updatedMessage = messages.find((item) => Number(item.id) === Number(req.params.messageId));
+      res.json({ success: true, removed: result.removed, message: updatedMessage });
+    } catch (err) {
+      if (isOptionalStudyGroupSchemaError(err)) {
+        return res.status(503).json({
+          success: false,
+          message: getStudyGroupFeatureUnavailableMessage(err),
+        });
+      }
+      res.status(500).json({ success: false, message: err.message });
+    }
+  },
+
+  markMessagesRead: async (req, res) => {
+    try {
+      if (!await studyGroupRepo.isMember(req.params.id, req.user.id))
+        return res.status(403).json({ success: false, message: 'Permission denied.' });
+      await studyGroupRepo.markMessagesRead(req.params.id, req.user.id);
+      await studyGroupRepo.touchUserActivity(req.user.id);
+      res.json({ success: true });
+    } catch (err) {
+      if (isOptionalStudyGroupSchemaError(err)) {
+        return res.json({ success: true });
+      }
+      res.status(500).json({ success: false, message: err.message });
+    }
+  },
+
+  setTypingStatus: async (req, res) => {
+    try {
+      if (!await studyGroupRepo.isMember(req.params.id, req.user.id))
+        return res.status(403).json({ success: false, message: 'Permission denied.' });
+      await studyGroupRepo.setTypingStatus(req.params.id, req.user.id, req.body?.is_typing !== false);
+      await studyGroupRepo.touchUserActivity(req.user.id);
+      const typing = await studyGroupRepo.getTypingUsers(req.params.id, req.user.id);
+      res.json({ success: true, typing });
+    } catch (err) {
+      if (isOptionalStudyGroupSchemaError(err)) {
+        return res.json({ success: true, typing: [] });
+      }
+      res.status(500).json({ success: false, message: err.message });
+    }
+  },
+
+  getAnnouncements: async (req, res) => {
+    try {
+      if (!await studyGroupRepo.isMember(req.params.id, req.user.id))
+        return res.status(403).json({ success: false, message: 'Permission denied.' });
+
+      await studyGroupRepo.touchUserActivity(req.user.id);
+      const announcements = await studyGroupRepo.getAnnouncements(req.params.id);
+      const announcementsWithComments = await Promise.all(
+        announcements.map(async (announcement) => ({
+          ...announcement,
+          comments: await studyGroupRepo.getAnnouncementComments(announcement.id),
+        }))
+      );
+      res.json({ success: true, announcements: announcementsWithComments });
+    } catch (err) {
+      if (isOptionalStudyGroupSchemaError(err)) {
+        return res.json({ success: true, announcements: [] });
+      }
+      res.status(500).json({ success: false, message: err.message });
+    }
+  },
+
+  commentAnnouncement: async (req, res) => {
+    try {
+      const { content } = req.body;
+      if (!content || !content.trim())
+        return res.status(400).json({ success: false, message: 'Comment is required.' });
+      if (!await studyGroupRepo.isMember(req.params.id, req.user.id))
+        return res.status(403).json({ success: false, message: 'Permission denied.' });
+
+      const announcement = await studyGroupRepo.findAnnouncementById(req.params.announcementId);
+      if (!announcement || Number(announcement.group_id) !== Number(req.params.id))
+        return res.status(404).json({ success: false, message: 'Announcement not found.' });
+
+      const comment = (await studyGroupRepo.addAnnouncementComment(req.params.announcementId, req.user.id, content.trim()))[0];
+      await studyGroupRepo.touchUserActivity(req.user.id);
+      await studyGroupRepo.addActivity(req.params.id, req.user.id, 'announcement_commented', {
+        title: announcement.title,
+      });
+      res.status(201).json({ success: true, comment });
+    } catch (err) {
+      if (isOptionalStudyGroupSchemaError(err)) {
+        return res.status(503).json({
+          success: false,
+          message: getStudyGroupFeatureUnavailableMessage(err),
+        });
+      }
+      res.status(500).json({ success: false, message: err.message });
+    }
+  },
+
+  getResources: async (req, res) => {
+    try {
+      if (!await studyGroupRepo.isMember(req.params.id, req.user.id))
+        return res.status(403).json({ success: false, message: 'Permission denied.' });
+
+      await studyGroupRepo.touchUserActivity(req.user.id);
+      const resources = await studyGroupRepo.getResources(req.params.id);
+      res.json({ success: true, resources });
+    } catch (err) {
+      if (isOptionalStudyGroupSchemaError(err)) {
+        return res.json({ success: true, resources: [] });
+      }
+      res.status(500).json({ success: false, message: err.message });
+    }
+  },
+
+  postResource: async (req, res) => {
+    try {
+      if (!await studyGroupRepo.isMember(req.params.id, req.user.id))
+        return res.status(403).json({ success: false, message: 'Permission denied.' });
+
+      const { title, description, resource_type, resource_url } = req.body;
+      if (!title || !resource_type || (!resource_url && resource_type === 'link'))
+        return res.status(400).json({ success: false, message: 'Title, type and URL are required for link resource.' });
+
+      const newResource = (await studyGroupRepo.addResource(req.params.id, req.user.id, {
+        title, description, resource_type, resource_url,
+      }))[0];
+
+      await studyGroupRepo.addActivity(req.params.id, req.user.id, 'resource_shared', {
+        title,
+        resource_type,
+        resource_url,
+      });
+      await studyGroupRepo.touchUserActivity(req.user.id);
+
+      res.status(201).json({ success: true, resource: newResource });
+    } catch (err) {
+      if (isOptionalStudyGroupSchemaError(err)) {
+        return res.status(503).json({
+          success: false,
+          message: getStudyGroupFeatureUnavailableMessage(err),
+        });
+      }
+      res.status(500).json({ success: false, message: err.message });
+    }
+  },
+
+  postAnnouncement: async (req, res) => {
+    try {
+      const { title, content, category, is_pinned, content_format } = req.body;
+      if (!title || !content)
+        return res.status(400).json({ success: false, message: 'Title and content are required.' });
+      if (!await studyGroupRepo.isMember(req.params.id, req.user.id))
+        return res.status(403).json({ success: false, message: 'Permission denied.' });
+
+      const newAnn = (await studyGroupRepo.addAnnouncement(
+        req.params.id,
+        req.user.id,
+        title.trim(),
+        content.trim(),
+        {
+          category: category || 'update',
+          is_pinned: Boolean(is_pinned),
+          content_format: content_format || 'markdown',
+        }
+      ))[0];
+      await studyGroupRepo.addActivity(req.params.id, req.user.id, 'announcement_posted', {
+        title: title.trim(),
+        category: category || 'update',
+        is_pinned: Boolean(is_pinned),
+      });
+      await studyGroupRepo.touchUserActivity(req.user.id);
+
+      const members = await studyGroupRepo.getMembers(req.params.id);
+      const notifyIds = members
+        .map((member) => Number(member.id))
+        .filter((memberId) => memberId !== Number(req.user.id));
+      await notificationService.notify('STUDY_GROUP_ANNOUNCEMENT', {
+        userIds: notifyIds,
+        title: `New Study Group Announcement: ${title.trim()}`,
+        message: content.trim().substring(0, 150),
+        type: 'studygroup',
+        referenceId: newAnn.id,
+      });
+
+      res.status(201).json({ success: true, announcement: newAnn });
+    } catch (err) {
+      if (isOptionalStudyGroupSchemaError(err)) {
+        return res.status(503).json({
+          success: false,
+          message: getStudyGroupFeatureUnavailableMessage(err),
+        });
+      }
+      res.status(500).json({ success: false, message: err.message });
+    }
+  },
+
+  getActivity: async (req, res) => {
+    try {
+      if (!await studyGroupRepo.isMember(req.params.id, req.user.id))
+        return res.status(403).json({ success: false, message: 'Permission denied.' });
+      await studyGroupRepo.touchUserActivity(req.user.id);
+      const activities = await studyGroupRepo.getActivity(req.params.id);
+      res.json({ success: true, activities });
+    } catch (err) {
+      if (isOptionalStudyGroupSchemaError(err)) {
+        return res.json({ success: true, activities: [] });
+      }
+      res.status(500).json({ success: false, message: err.message });
+    }
   },
 };
 

@@ -25,6 +25,7 @@ import FreeClassrooms  from './components/classrooms/FreeClassrooms';
 import SmartClassrooms from './components/classrooms/SmartClassrooms';
 import Resources       from './components/resources/Resources';
 import StudyGroups     from './components/studygroups/StudyGroups';
+import StudyGroupDetail from './components/studygroups/StudyGroupDetail';
 import Deadlines       from './components/deadlines/Deadlines';
 import Consultations   from './components/consultations/Consultations';
 import ResultPortal    from './components/results/ResultPortal';
@@ -86,6 +87,7 @@ function AppRoutes() {
         <Route path="smart-classrooms" element={<SmartClassrooms />} />
         <Route path="resources"     element={<Resources />} />
         <Route path="study-groups"  element={<StudyGroups />} />
+        <Route path="study-groups/:id" element={<StudyGroupDetail />} />
         <Route path="deadlines"     element={<Deadlines />} />
         <Route path="consultations" element={<Consultations />} />
         <Route path="results"       element={<ResultPortal />} />

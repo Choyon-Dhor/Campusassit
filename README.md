@@ -177,6 +177,13 @@ cd backend && npm install
 npm run seed
 ```
 
+Run backend regression tests anytime with:
+
+```bash
+cd backend
+npm test
+```
+
 Seed output should end with:
 ```
 ✅ Connected to PostgreSQL — database: "campusassist"
@@ -316,6 +323,21 @@ PATCH /api/notifications/read-all
 GET /api/dashboard/stats
 ```
 
+### Assignments
+```
+POST   /api/assignments                                [teacher|admin] multipart/form-data
+GET    /api/assignments?classroom_id=ID
+GET    /api/assignments/:id
+PUT    /api/assignments/:id                            [teacher|admin] multipart/form-data
+DELETE /api/assignments/:id                           [teacher|admin]
+POST   /api/assignments/:id/submit                     multipart/form-data
+GET    /api/assignments/my-submission?assignment_id=ID
+GET    /api/assignments/submissions?assignment_id=ID   [teacher|admin]
+PUT    /api/assignments/submissions/:id/grade          [teacher|admin]
+GET    /api/assignments/:id/download
+GET    /api/assignments/submissions/:id/download
+```
+
 ---
 
 ## 🧠 Key Algorithms
@@ -371,3 +393,42 @@ Score is recalculated after every download or rating event.
 - CORS whitelist
 - Express rate-limiting (500 req / 15 min)
 - Multer file-type + size validation
+
+---
+
+## API Response Contract
+
+CampusAssist now uses shared response keys for collection and entity payloads. A typical success response looks like:
+
+```json
+{
+  "success": true,
+  "message": "Optional human-readable message",
+  "assignment": {},
+  "assignments": [],
+  "submission": {},
+  "submissions": [],
+  "classroom": {},
+  "classrooms": [],
+  "students": [],
+  "attendance": [],
+  "marks": []
+}
+```
+
+Frontend consumers should read named payload keys instead of assuming raw `res.data` is already the final array or object. Shared helpers live in `frontend/src/services/contracts.js`.
+
+## Regression Tests
+
+Backend regression coverage now includes:
+
+- assignments: upload-backed create and submission flows
+- smart classroom: teacher attendance and marks aggregation views
+- admin users: full user listing plus active/inactive toggling
+
+Run them with:
+
+```bash
+cd backend
+npm test
+```

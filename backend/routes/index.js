@@ -6,13 +6,14 @@ const router  = express.Router();
 const path    = require('path');
 const fs      = require('fs');
 const { auth, isAdmin, isTeacherOrAdmin } = require('../middleware/auth');
-const { uploadResource, uploadRoutine, uploadBusSchedule } = require('../middleware/upload');
+const { uploadResource, uploadRoutine, uploadBusSchedule, uploadAssignment } = require('../middleware/upload');
 
 // Controllers
 const authCtrl  = require('../controllers/authController');
 const annCtrl   = require('../controllers/announcementController');
 const classCtrl = require('../controllers/classroomController');
 const smartClassCtrl = require('../controllers/smartClassroomController');
+const assignmentCtrl = require('../controllers/assignmentController');
 const {
   studyGroup, deadline, consultation, notification, dashboardStats,
 } = require('../controllers/featureControllers');
@@ -56,6 +57,8 @@ classRouter.post('/routine/upload',         auth, isAdmin, uploadRoutine, classC
 classRouter.get('/routine/template',        auth, isAdmin,       classCtrl.downloadTemplate);
 classRouter.get('/room/:name/schedule',          auth,           classCtrl.getRoomSchedule);
 // Wildcard routes must come after specific routes
+classRouter.get('/:id/people',                   auth, smartClassCtrl.getClassroomPeople);
+classRouter.get('/:id/people/download',          auth, smartClassCtrl.downloadClassroomPeople);
 classRouter.get('/:id',                          auth, smartClassCtrl.getClassroom);
 classRouter.get('/:id/students',                 auth, smartClassCtrl.getClassroomStudents);
 classRouter.post('/:id/attendance/mark',         auth, isTeacherOrAdmin, smartClassCtrl.markAttendance);
@@ -66,6 +69,20 @@ classRouter.post('/:id/announcements',     auth, isTeacherOrAdmin, smartClassCtr
 classRouter.get('/:id/announcements',      auth, smartClassCtrl.listAnnouncements);
 classRouter.post('/:id/resources',         auth, isTeacherOrAdmin, smartClassCtrl.addResource);
 classRouter.get('/:id/resources',          auth, smartClassCtrl.listResources);
+
+// ── Assignments ───────────────────────────────────────────────
+const assignmentRouter = express.Router();
+assignmentRouter.post('/',                    auth, isTeacherOrAdmin, uploadAssignment, assignmentCtrl.createAssignment);
+assignmentRouter.get('/',                     auth, assignmentCtrl.getAssignments);
+assignmentRouter.get('/submissions',          auth, isTeacherOrAdmin, assignmentCtrl.getSubmissions);
+assignmentRouter.put('/submissions/:id/grade', auth, isTeacherOrAdmin, assignmentCtrl.gradeSubmission);
+assignmentRouter.get('/submissions/:id/download', auth, assignmentCtrl.downloadSubmissionAttachment);
+assignmentRouter.get('/my-submission',        auth, assignmentCtrl.getMySubmission);
+assignmentRouter.put('/:id',                  auth, isTeacherOrAdmin, uploadAssignment, assignmentCtrl.updateAssignment);
+assignmentRouter.delete('/:id',               auth, isTeacherOrAdmin, assignmentCtrl.deleteAssignment);
+assignmentRouter.post('/:id/submit',          auth, uploadAssignment, assignmentCtrl.submitAssignment);
+assignmentRouter.get('/:id/download',         auth, assignmentCtrl.downloadAssignmentAttachment);
+assignmentRouter.get('/:id',                  auth, assignmentCtrl.getAssignment);
 
 // ── Resources ─────────────────────────────────────────────────
 const resourceRouter = express.Router();
@@ -155,6 +172,18 @@ sgRouter.post('/',            auth, studyGroup.create);
 sgRouter.post('/:id/join',    auth, studyGroup.join);
 sgRouter.post('/:id/leave',   auth, studyGroup.leave);
 sgRouter.get('/:id/members',  auth, studyGroup.getMembers);
+sgRouter.get('/:id',          auth, studyGroup.getOne);
+sgRouter.get('/:id/messages', auth, studyGroup.getMessages);
+sgRouter.post('/:id/messages', auth, studyGroup.postMessage);
+sgRouter.post('/:id/messages/read', auth, studyGroup.markMessagesRead);
+sgRouter.post('/:id/messages/:messageId/reactions', auth, studyGroup.reactToMessage);
+sgRouter.post('/:id/typing', auth, studyGroup.setTypingStatus);
+sgRouter.get('/:id/announcements', auth, studyGroup.getAnnouncements);
+sgRouter.post('/:id/announcements', auth, studyGroup.postAnnouncement);
+sgRouter.post('/:id/announcements/:announcementId/comments', auth, studyGroup.commentAnnouncement);
+sgRouter.get('/:id/resources', auth, studyGroup.getResources);
+sgRouter.post('/:id/resources', auth, studyGroup.postResource);
+sgRouter.get('/:id/activity', auth, studyGroup.getActivity);
 sgRouter.delete('/:id',       auth, studyGroup.delete);
 
 // ── Deadlines ─────────────────────────────────────────────────
@@ -225,6 +254,7 @@ routineRouter.get('/:batchNumber/:section',    auth, busCtrl.getBatchRoutine);
 router.use('/auth',          authRouter);
 router.use('/announcements', annRouter);
 router.use('/classrooms',    classRouter);
+router.use('/assignments',   assignmentRouter);
 router.use('/resources',     resourceRouter);
 router.use('/study-groups',  sgRouter);
 router.use('/deadlines',     dlRouter);

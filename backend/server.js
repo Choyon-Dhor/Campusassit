@@ -45,8 +45,6 @@ if (process.env.NODE_ENV === 'development') {
 }
 
 // ── Static Files ──────────────────────────────────────────────
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
-
 // ── Health Check ──────────────────────────────────────────────
 app.get('/health', (req, res) => {
   res.json({
@@ -93,5 +91,9 @@ async function startServer() {
   });
 }
 
-startServer();
+if (require.main === module) {
+  startServer();
+}
+
 module.exports = app;
+module.exports.startServer = startServer;

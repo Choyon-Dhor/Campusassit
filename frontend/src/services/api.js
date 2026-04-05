@@ -48,8 +48,8 @@ export const authService = {
   updateProfile: (data) => api.put('/auth/profile', data),
   changePassword: (data) => api.put('/auth/change-password', data),
   getAllUsers: () => api.get('/auth/users'),
-  updateUser: (id, data) => api.put(`/auth/users/${id}`, data),
-  toggleUserActive: (id) => api.patch(`/auth/users/${id}/toggle`),
+  updateUser: (id, data) => api.put(`/auth/admin/users/${id}`, data),
+  toggleUserActive: (id) => api.patch(`/auth/admin/users/${id}/toggle`),
 };
 
 // ── Announcements ─────────────────────────────────────────────
@@ -80,6 +80,8 @@ export const classroomService = {
   listClassrooms: () => api.get('/classrooms/list'),
   getClassroom: (id) => api.get(`/classrooms/${id}`),
   getClassroomStudents: (id) => api.get(`/classrooms/${id}/students`),
+  getClassroomPeople: (id) => api.get(`/classrooms/${id}/people`),
+  downloadClassroomPeople: (id) => api.get(`/classrooms/${id}/people/download`, { responseType: 'blob' }),
   markAttendance: (classroomId, data) => api.post(`/classrooms/${classroomId}/attendance/mark`, data),
   getAttendance: (classroomId, params) => api.get(`/classrooms/${classroomId}/attendance`, { params }),
   addMarks: (classroomId, data) => api.post(`/classrooms/${classroomId}/marks/add`, data),
@@ -89,7 +91,28 @@ export const classroomService = {
   addResource: (classroomId, data) => api.post(`/classrooms/${classroomId}/resources`, data),
   listResources: (classroomId) => api.get(`/classrooms/${classroomId}/resources`),
 };
-
+// ── Assignments ───────────────────────────────────────────────
+export const assignmentService = {
+  createAssignment: (formData) => api.post('/assignments', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  }),
+  updateAssignment: (id, formData) => api.put(`/assignments/${id}`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  }),
+  deleteAssignment: (id) => api.delete(`/assignments/${id}`),
+  getAssignments: (params) => api.get('/assignments', { params }),
+  getAssignment: (id) => api.get(`/assignments/${id}`),
+  submitAssignment: (assignmentId, formData) => api.post(`/assignments/${assignmentId}/submit`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  }),
+  gradeSubmission: (submissionId, data) => api.put(`/assignments/submissions/${submissionId}/grade`, data),
+  getSubmissions: (params) => api.get('/assignments/submissions', { params }),
+  downloadAssignment: (assignmentId) => api.get(`/assignments/${assignmentId}/download`, { responseType: 'blob' }),
+  downloadSubmission: (submissionId) => api.get(`/assignments/submissions/${submissionId}/download`, { responseType: 'blob' }),
+  getMySubmission: (assignmentId) => api.get('/assignments/my-submission', {
+    params: { assignment_id: assignmentId }
+  }),
+};
   // ── Resources ─────────────────────────────────────────────────
 export const resourceService = {
   getAll: (params) => api.get('/resources', { params }),
@@ -110,6 +133,18 @@ export const studyGroupService = {
   join: (id) => api.post(`/study-groups/${id}/join`),
   leave: (id) => api.post(`/study-groups/${id}/leave`),
   getMembers: (id) => api.get(`/study-groups/${id}/members`),
+  getMessages: (id, params) => api.get(`/study-groups/${id}/messages`, { params }),
+  postMessage: (id, data) => api.post(`/study-groups/${id}/messages`, data),
+  markMessagesRead: (id) => api.post(`/study-groups/${id}/messages/read`),
+  reactToMessage: (id, messageId, data) => api.post(`/study-groups/${id}/messages/${messageId}/reactions`, data),
+  setTypingStatus: (id, data) => api.post(`/study-groups/${id}/typing`, data),
+  getAnnouncements: (id) => api.get(`/study-groups/${id}/announcements`),
+  postAnnouncement: (id, data) => api.post(`/study-groups/${id}/announcements`, data),
+  commentAnnouncement: (id, announcementId, data) => api.post(`/study-groups/${id}/announcements/${announcementId}/comments`, data),
+  getResources: (id) => api.get(`/study-groups/${id}/resources`),
+  postResource: (id, data) => api.post(`/study-groups/${id}/resources`, data),
+  getActivity: (id) => api.get(`/study-groups/${id}/activity`),
+  getById:    (id) => api.get(`/study-groups/${id}`),
   delete: (id) => api.delete(`/study-groups/${id}`),
 };
 

@@ -194,27 +194,40 @@ exports.markAttendance = async (req, res) => {
 
 exports.getAttendance = async (req, res) => {
   try {
-    const classroom_id = parseInt(req.query.classroom_id, 10);
+    const classroom_id = parseInt(req.params.id || req.query.classroom_id, 10);
     if (!classroom_id) return res.status(400).json({ success: false, message: 'classroom_id required.' });
-
-    let student_id = req.user.id;
-    if (req.user.role !== 'student' && req.query.student_id) {
-      student_id = parseInt(req.query.student_id, 10);
-    }
 
     const classroom = await db.queryOne('SELECT * FROM classrooms WHERE id=$1', [classroom_id]);
     if (!classroom) return res.status(404).json({ success: false, message: 'Classroom not found.' });
 
-    // Teacher/admin can get any student; students only themselves
-    if (req.user.role === 'student' && req.user.id !== student_id) {
-      return res.status(403).json({ success: false, message: 'Permission denied.' });
+    if (req.user.role !== 'student' && req.query.student_id) {
+      const student_id = parseInt(req.query.student_id, 10);
+      const attendanceRows = await db.query(
+        `SELECT * FROM classroom_attendance
+         WHERE classroom_id=$1 AND student_id=$2
+         ORDER BY date DESC`,
+        [classroom_id, student_id]
+      );
+
+      return res.json({ success: true, attendance: attendanceRows, analytics: computeAttendanceStats(attendanceRows) });
+    }
+
+    if (req.user.role !== 'student') {
+      const attendanceRows = await db.query(
+        `SELECT * FROM classroom_attendance
+         WHERE classroom_id=$1
+         ORDER BY date DESC, student_id ASC`,
+        [classroom_id]
+      );
+
+      return res.json({ success: true, attendance: attendanceRows, analytics: computeAttendanceStats(attendanceRows) });
     }
 
     const attendanceRows = await db.query(
       `SELECT * FROM classroom_attendance
        WHERE classroom_id=$1 AND student_id=$2
        ORDER BY date DESC`,
-      [classroom_id, student_id]
+      [classroom_id, req.user.id]
     );
 
     res.json({ success: true, attendance: attendanceRows, analytics: computeAttendanceStats(attendanceRows) });
@@ -237,9 +250,9 @@ exports.addMarks = async (req, res) => {
     }
 
     const rows = await db.query(
-      `INSERT INTO classroom_marks (classroom_id, student_id, title, marks_obtained, total_marks, date)
-       VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
-      [classroom_id, student_id, title, marks_obtained, total_marks, date]
+      `INSERT INTO classroom_marks (classroom_id, student_id, source, title, marks_obtained, total_marks, feedback, date)
+       VALUES ($1,$2,'manual',$3,$4,$5,$6,$7) RETURNING *`,
+      [classroom_id, student_id, title, marks_obtained, total_marks, '', date]
     );
     const mark = rows[0];
 
@@ -259,20 +272,39 @@ exports.addMarks = async (req, res) => {
 
 exports.getMarks = async (req, res) => {
   try {
-    const classroom_id = parseInt(req.query.classroom_id, 10);
+    const classroom_id = parseInt(req.params.id || req.query.classroom_id, 10);
     if (!classroom_id) return res.status(400).json({ success: false, message: 'classroom_id required.' });
 
-    let student_id = req.user.id;
+    let rows;
     if (req.user.role !== 'student' && req.query.student_id) {
-      student_id = parseInt(req.query.student_id, 10);
+      const student_id = parseInt(req.query.student_id, 10);
+      rows = await db.query(
+        `SELECT cm.*, u.name AS student_name, u.student_number
+         FROM classroom_marks cm
+         JOIN users u ON u.id = cm.student_id
+         WHERE cm.classroom_id=$1 AND cm.student_id=$2
+         ORDER BY cm.date DESC`,
+        [classroom_id, student_id]
+      );
+    } else if (req.user.role !== 'student') {
+      rows = await db.query(
+        `SELECT cm.*, u.name AS student_name, u.student_number
+         FROM classroom_marks cm
+         JOIN users u ON u.id = cm.student_id
+         WHERE cm.classroom_id=$1
+         ORDER BY cm.date DESC, cm.student_id ASC`,
+        [classroom_id]
+      );
+    } else {
+      rows = await db.query(
+        `SELECT cm.*, u.name AS student_name, u.student_number
+         FROM classroom_marks cm
+         JOIN users u ON u.id = cm.student_id
+         WHERE cm.classroom_id=$1 AND cm.student_id=$2
+         ORDER BY cm.date DESC`,
+        [classroom_id, req.user.id]
+      );
     }
-
-    const rows = await db.query(
-      `SELECT * FROM classroom_marks
-       WHERE classroom_id=$1 AND student_id=$2
-       ORDER BY date DESC`,
-      [classroom_id, student_id]
-    );
 
     const totalScored = rows.reduce((sum, r) => sum + parseFloat(r.marks_obtained), 0);
     const totalMax = rows.reduce((sum, r) => sum + parseFloat(r.total_marks), 0);
@@ -461,6 +493,96 @@ exports.listResources = async (req, res) => {
       [classroom_id]
     );
     res.json({ success: true, resources: rows });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+exports.getClassroomPeople = async (req, res) => {
+  try {
+    const classroom_id = parseInt(req.params.id, 10);
+    if (!classroom_id) return res.status(400).json({ success: false, message: 'classroom_id required.' });
+
+    const classroom = await db.queryOne('SELECT * FROM classrooms WHERE id=$1', [classroom_id]);
+    if (!classroom) return res.status(404).json({ success: false, message: 'Classroom not found.' });
+
+    // Get teacher
+    const teacher = await db.queryOne(
+      `SELECT u.id, u.name, u.email, u.student_number, 'teacher' as role
+       FROM users u
+       WHERE u.id = $1`,
+      [classroom.teacher_id]
+    );
+
+    // Get students
+    const students = await db.query(
+      `SELECT u.id, u.name, u.email, u.student_number, 'student' as role
+       FROM users u
+       JOIN classroom_students cs ON cs.student_id = u.id
+       WHERE cs.classroom_id = $1
+       ORDER BY u.name ASC`,
+      [classroom_id]
+    );
+
+    // Combine teacher and students
+    const people = teacher ? [teacher, ...students] : students;
+    
+    res.json({ 
+      success: true, 
+      people, 
+      count: people.length,
+      classroom_id,
+      classroom_name: classroom.course_name
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+exports.downloadClassroomPeople = async (req, res) => {
+  try {
+    const classroom_id = parseInt(req.params.id, 10);
+    if (!classroom_id) return res.status(400).json({ success: false, message: 'classroom_id required.' });
+
+    const classroom = await db.queryOne('SELECT * FROM classrooms WHERE id=$1', [classroom_id]);
+    if (!classroom) return res.status(404).json({ success: false, message: 'Classroom not found.' });
+
+    // Get teacher
+    const teacher = await db.queryOne(
+      `SELECT u.id, u.name, u.email, u.student_number, 'teacher' as role
+       FROM users u
+       WHERE u.id = $1`,
+      [classroom.teacher_id]
+    );
+
+    // Get students
+    const students = await db.query(
+      `SELECT u.id, u.name, u.email, u.student_number, 'student' as role
+       FROM users u
+       JOIN classroom_students cs ON cs.student_id = u.id
+       WHERE cs.classroom_id = $1
+       ORDER BY u.name ASC`,
+      [classroom_id]
+    );
+
+    // Combine teacher and students
+    const people = teacher ? [teacher, ...students] : students;
+
+    // Generate CSV
+    let csv = 'Name,ID,Email,Role\n';
+    people.forEach(person => {
+      const id = person.student_number || person.id;
+      const name = `"${(person.name || '').replace(/"/g, '""')}"`;
+      const email = person.email || '';
+      const role = person.role || 'student';
+      csv += `${name},${id},${email},${role}\n`;
+    });
+
+    // Set response headers for CSV download
+    const filename = `${classroom.course_code}-people.csv`;
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(csv);
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }

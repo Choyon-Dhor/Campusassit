@@ -7,14 +7,69 @@ const db = require('../config/database');
 
 exports.getAll = async (req, res) => {
   try {
-    const { page = 1, limit = 10 } = req.query;
+    const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
+    const limit = Math.max(parseInt(req.query.limit, 10) || 10, 1);
     const role = req.user.role;
-    const [announcements, total] = await Promise.all([
-      announcementRepo.findWithAuthor(role, parseInt(page), parseInt(limit)),
-      announcementRepo.countByRole(role),
-    ]);
-    res.json({ success: true, announcements, total,
-      page: parseInt(page), totalPages: Math.ceil(total / limit) });
+
+    const globalParams = [];
+    let globalFilter = '';
+    if (role !== 'admin') {
+      globalParams.push(role);
+      globalFilter = `WHERE a.target_role = 'all' OR a.target_role = $1`;
+    }
+
+    const globalAnnouncements = await db.query(
+      `SELECT a.*, u.name AS author_name, u.role AS author_role, u.department AS author_dept,
+              'global' AS source, FALSE AS is_readonly, NULL::text AS classroom_label
+       FROM announcements a
+       LEFT JOIN users u ON a.author_id = u.id
+       ${globalFilter}`,
+      globalParams
+    );
+
+    let classroomSql = `
+      SELECT ca.*, u.name AS author_name, u.role AS author_role, u.department AS author_dept,
+             'academic' AS category, 'all' AS target_role, FALSE AS is_pinned, NULL::varchar AS attachment,
+             'classroom' AS source, TRUE AS is_readonly,
+             c.course_code || ' - ' || c.course_name AS classroom_label
+      FROM classroom_announcements ca
+      JOIN users u ON ca.author_id = u.id
+      JOIN classrooms c ON ca.classroom_id = c.id`;
+    const classroomParams = [];
+
+    if (role === 'teacher') {
+      classroomParams.push(req.user.id);
+      classroomSql += ' WHERE c.teacher_id = $1';
+    } else if (role === 'student') {
+      classroomParams.push(req.user.id);
+      classroomSql += `
+        JOIN classroom_students cs ON cs.classroom_id = ca.classroom_id
+        WHERE cs.student_id = $1`;
+    }
+
+    const classroomAnnouncements = (await db.query(classroomSql, classroomParams)).map((announcement) => ({
+      ...announcement,
+      id: `classroom-${announcement.id}`,
+      source_id: announcement.id,
+    }));
+
+    const combined = [...globalAnnouncements, ...classroomAnnouncements]
+      .sort((left, right) => {
+        if (left.is_pinned !== right.is_pinned) return left.is_pinned ? -1 : 1;
+        return new Date(right.created_at) - new Date(left.created_at);
+      });
+
+    const total = combined.length;
+    const offset = (page - 1) * limit;
+    const announcements = combined.slice(offset, offset + limit);
+
+    res.json({
+      success: true,
+      announcements,
+      total,
+      page,
+      totalPages: Math.ceil(total / limit),
+    });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }

@@ -19,7 +19,7 @@ const departments = [
 
 // CSE batches currently active at MU Sylhet
 const batches = [57,58,59,60,61,62,63,64,65];
-const sections = ['A','B','C','D','E','F','G','H','I','A+B','B+I','C+G','D+H','E+F','A+F','D+G','I+J','E+F+G'];
+const sections = ['A','B','C','D','E','F','G','H','I','A+B','B+I','C+G','D+H','E+F','A+F','D+G','I+J'];
 
 export default function Register() {
   const { register } = useAuth();

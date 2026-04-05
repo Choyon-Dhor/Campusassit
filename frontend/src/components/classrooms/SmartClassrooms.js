@@ -6,10 +6,12 @@ import {
   Table, TableHead, TableRow, TableCell, TableBody, LinearProgress,
   Alert, Divider, CardHeader, Chip, Checkbox
 } from '@mui/material';
-import { Add, UploadFile, People, Checklist, BarChart, Edit, Delete, Save, Cancel } from '@mui/icons-material';
+import { Add, UploadFile, People, Checklist, BarChart, Edit, Delete, Save, Cancel, Assignment, Download } from '@mui/icons-material';
 import { useAuth } from '../../context/AuthContext';
 import { classroomService } from '../../services/api';
+import { readCollection, readEntity } from '../../services/contracts';
 import { toast } from 'react-toastify';
+import { Assignments } from '../assignments';
 
 const initialForm = { course_code: '', course_name: '', description: '', batch: '', section: '', semester: '' };
 
@@ -26,6 +28,7 @@ export default function SmartClassrooms() {
   const [marks, setMarks] = useState([]);
   const [announcements, setAnnouncements] = useState([]);
   const [resources, setResources] = useState([]);
+  const [people, setPeople] = useState([]);
   const [tab, setTab] = useState(0);
 
   const [createForm, setCreateForm] = useState(initialForm);
@@ -40,6 +43,12 @@ export default function SmartClassrooms() {
   const [selectedStudents, setSelectedStudents] = useState(new Set());
   const [touchTableRef, setTouchTableRef] = useState(null);
   const [touchStartX, setTouchStartX] = useState(0);
+  const streamTab = 0;
+  const classworkTab = isTeacher ? 1 : null;
+  const attendanceTab = isTeacher ? 2 : null;
+  const peopleTab = isTeacher ? 3 : 1;
+  const assignmentsTab = isTeacher ? 4 : 2;
+  const gradesTab = isTeacher ? 5 : 3;
 
   useEffect(() => {
     if (isAuthenticated && user) {
@@ -55,12 +64,13 @@ export default function SmartClassrooms() {
       fetchMarks();
       fetchAnnouncements();
       fetchResources();
+      fetchPeople();
     }
   }, [selectedId, isAuthenticated]);
 
   // Keyboard shortcuts for attendance (Step 12)
   useEffect(() => {
-    if (!isTeacher || tab !== 2) return;
+    if (!isTeacher || tab !== attendanceTab) return;
 
     const handleKeyDown = async (e) => {
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
@@ -95,14 +105,22 @@ export default function SmartClassrooms() {
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [tab, isTeacher, selectedStudents, students, attendanceDate]);
+  }, [attendanceTab, tab, isTeacher, selectedStudents, students, attendanceDate]);
+
+  useEffect(() => {
+    const maxTab = gradesTab;
+    if (tab > maxTab) {
+      setTab(streamTab);
+    }
+  }, [gradesTab, streamTab, tab]);
 
   const fetchClassrooms = async () => {
     setLoading(true);
     try {
       const res = await classroomService.listClassrooms();
-      setClassrooms(res.data.classrooms || []);
-      if (!selectedId && res.data.classrooms?.length) setSelectedId(res.data.classrooms[0].id);
+      const nextClassrooms = readCollection(res, 'classrooms');
+      setClassrooms(nextClassrooms);
+      if (!selectedId && nextClassrooms.length) setSelectedId(nextClassrooms[0].id);
     } catch (err) {
       console.error('Failed to load classrooms:', err);
       toast.error(err.message || 'Could not load classrooms.');
@@ -112,7 +130,7 @@ export default function SmartClassrooms() {
   const fetchClassroomDetails = async () => {
     try {
       const res = await classroomService.getClassroom(selectedId);
-      setSelectedClassroom(res.data.classroom);
+      setSelectedClassroom(readEntity(res, 'classroom'));
     } catch (err) {
       toast.error(err.message || 'Could not load classroom details.');
     }
@@ -122,7 +140,7 @@ export default function SmartClassrooms() {
     if (!selectedId) return;
     try {
       const res = await classroomService.getClassroomStudents(selectedId);
-      setStudents(res.data.students || []);
+      setStudents(readCollection(res, 'students'));
     } catch (err) {
       toast.error(err.message || 'Could not load students.');
     }
@@ -132,7 +150,7 @@ export default function SmartClassrooms() {
     if (!selectedId) return;
     try {
       const res = await classroomService.getAttendance(selectedId, { classroom_id: selectedId });
-      setAttendance(res.data.attendance || []);
+      setAttendance(readCollection(res, 'attendance'));
     } catch (err) {
       toast.error(err.message || 'Could not load attendance.');
     }
@@ -142,7 +160,7 @@ export default function SmartClassrooms() {
     if (!selectedId) return;
     try {
       const res = await classroomService.getMarks(selectedId, { classroom_id: selectedId });
-      setMarks(res.data.marks || []);
+      setMarks(readCollection(res, 'marks'));
     } catch (err) {
       toast.error(err.message || 'Could not load marks.');
     }
@@ -152,7 +170,7 @@ export default function SmartClassrooms() {
     if (!selectedId) return;
     try {
       const res = await classroomService.listAnnouncements(selectedId);
-      setAnnouncements(res.data.announcements || []);
+      setAnnouncements(readCollection(res, 'announcements'));
     } catch (err) {
       toast.error(err.message || 'Could not load announcements.');
     }
@@ -162,9 +180,64 @@ export default function SmartClassrooms() {
     if (!selectedId) return;
     try {
       const res = await classroomService.listResources(selectedId);
-      setResources(res.data.resources || []);
+      setResources(readCollection(res, 'resources'));
     } catch (err) {
       toast.error(err.message || 'Could not load resources.');
+    }
+  };
+
+  const fetchPeople = async () => {
+    if (!selectedId) return;
+    try {
+      const res = await classroomService.getClassroomPeople(selectedId);
+      setPeople(readCollection(res, 'people'));
+    } catch (err) {
+      toast.error(err.message || 'Could not load classroom people.');
+    }
+  };
+
+  const handleAssignmentDataChange = async () => {
+    await Promise.all([fetchAnnouncements(), fetchMarks()]);
+  };
+
+  const handleDownloadPeople = async () => {
+    if (!selectedId) return;
+    try {
+      const response = await classroomService.downloadClassroomPeople(selectedId);
+      
+      // Check if we got an error response (JSON) instead of a blob
+      if (response.data instanceof Blob && response.data.type === 'application/json') {
+        const text = await response.data.text();
+        const error = JSON.parse(text);
+        throw new Error(error.message || 'Failed to download');
+      }
+
+      // Ensure we have a proper blob
+      if (!response || !response.data) {
+        throw new Error('Invalid response from server');
+      }
+
+      let blob = response.data;
+      if (!(blob instanceof Blob)) {
+        blob = new Blob([blob], { type: 'text/csv; charset=utf-8' });
+      }
+      
+      if (blob.size === 0) {
+        throw new Error('Downloaded file is empty');
+      }
+
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `classroom-people-${selectedId}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      link.parentNode.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      toast.success('People information downloaded successfully.');
+    } catch (err) {
+      console.error('Download error:', err);
+      toast.error(err.message || 'Could not download people information. Please ensure the server is running.');
     }
   };
 
@@ -315,9 +388,41 @@ export default function SmartClassrooms() {
   };
 
   const marksStats = () => {
-    const totalMax = marks.reduce((sum, m) => sum + Number(m.total_marks), 0);
-    const totalGot = marks.reduce((sum, m) => sum + Number(m.marks_obtained), 0);
-    return { totalMax, totalGot, percentage: totalMax ? Math.round((totalGot / totalMax) * 100) : 0 };
+    const normalizedMarks = marks.map((mark) => ({
+      ...mark,
+      total: Number(mark.total_marks) || 0,
+      got: Number(mark.marks_obtained) || 0,
+    }));
+    const totalMax = normalizedMarks.reduce((sum, m) => sum + m.total, 0);
+    const totalGot = normalizedMarks.reduce((sum, m) => sum + m.got, 0);
+    const assignmentCount = normalizedMarks.filter((m) => m.source === 'assignment').length;
+    const manualCount = normalizedMarks.length - assignmentCount;
+    const averagePercentage = normalizedMarks.length
+      ? Math.round(normalizedMarks.reduce((sum, m) => sum + (m.total ? ((m.got / m.total) * 100) : 0), 0) / normalizedMarks.length)
+      : 0;
+    const uniqueStudents = new Set(normalizedMarks.map((m) => m.student_id)).size;
+    return {
+      totalMax,
+      totalGot,
+      assignmentCount,
+      manualCount,
+      totalRecords: normalizedMarks.length,
+      averagePercentage,
+      uniqueStudents,
+      percentage: totalMax ? Math.round((totalGot / totalMax) * 100) : 0
+    };
+  };
+
+  const getMarkSourceColor = (source) => (source === 'assignment' ? 'primary' : 'default');
+
+  const getMarkScoreColor = (mark) => {
+    const total = Number(mark.total_marks) || 0;
+    const got = Number(mark.marks_obtained) || 0;
+    const percentage = total ? (got / total) * 100 : 0;
+
+    if (percentage >= 85) return 'success';
+    if (percentage >= 60) return 'warning';
+    return 'error';
   };
 
   const stats = attendanceStats();
@@ -497,7 +602,8 @@ export default function SmartClassrooms() {
               {isTeacher && <Tab icon={<Add />} label="Classwork" />}
               {isTeacher && <Tab icon={<Checklist />} label="Attendance" />}
               <Tab icon={<People />} label="People" />
-              {isTeacher && <Tab icon={<Add />} label="Grades" />}
+              <Tab icon={<Assignment />} label="Assignments" />
+              <Tab icon={<BarChart />} label={isTeacher ? 'Grades' : 'My Grades'} />
             </Tabs>
           </Card>
 
@@ -530,7 +636,7 @@ export default function SmartClassrooms() {
                 />
               </Card>
 
-{tab === 0 && (
+{tab === streamTab && (
                 <div>
                   <Card sx={{ p: 2 }}>
                     <Typography variant="h6" gutterBottom>Classroom Stream</Typography>
@@ -606,7 +712,7 @@ export default function SmartClassrooms() {
                 </div>
               )}
 
-              {tab === 1 && isTeacher && (
+              {tab === classworkTab && isTeacher && (
                 <Card sx={{ p: 2 }}>
                   <Typography variant="h6" gutterBottom>Classwork & Resources</Typography>
                   {isTeacher && (
@@ -672,7 +778,7 @@ export default function SmartClassrooms() {
                 </Card>
               )}
 
-              {tab === 2 && isTeacher && (
+              {tab === attendanceTab && isTeacher && (
                 <Card sx={{ p: 2 }}>
                   <Typography variant="h6" sx={{ mb: 2 }}>Attendance — {attendanceDate}</Typography>
                   <TextField
@@ -805,104 +911,239 @@ export default function SmartClassrooms() {
                 </Card>
               )}
 
-              {tab === 4 && isTeacher && (
+              {tab === peopleTab && (
                 <Card sx={{ p: 2 }}>
-                  <Typography variant="h6" sx={{ mb: 2 }}>Marks</Typography>
-                  {isTeacher && (
-                    <Grid container spacing={1} sx={{ mb: 2 }}>
-                      <Grid item xs={12} sm={4}>
-                        <FormControl fullWidth>
-                          <InputLabel>Student</InputLabel>
-                          <Select
-                            value={examForm.student_id}
-                            label="Student"
-                            onChange={(e) => setExamForm(prev => ({ ...prev, student_id: e.target.value }))}
-                          >
-                            {students.map(s => (
-                              <MenuItem key={s.id} value={s.id}>{s.name}</MenuItem>
-                            ))}
-                          </Select>
-                        </FormControl>
-                      </Grid>
-                      <Grid item xs={12} sm={2}>
-                        <TextField
-                          label="Title" value={examForm.title}
-                          onChange={(e) => setExamForm(prev => ({ ...prev, title: e.target.value }))}
-                          fullWidth
-                        />
-                      </Grid>
-                      <Grid item xs={6} sm={2}>
-                        <TextField
-                          label="Got" type="number" value={examForm.marks_obtained}
-                          onChange={(e) => setExamForm(prev => ({ ...prev, marks_obtained: e.target.value }))}
-                          fullWidth
-                        />
-                      </Grid>
-                      <Grid item xs={6} sm={2}>
-                        <TextField
-                          label="Total" type="number" value={examForm.total_marks}
-                          onChange={(e) => setExamForm(prev => ({ ...prev, total_marks: e.target.value }))}
-                          fullWidth
-                        />
-                      </Grid>
-                      <Grid item xs={12} sm={2}>
-                        <Button variant="contained" onClick={handleAddMarks} startIcon={<Add />} fullWidth>Save</Button>
-                      </Grid>
-                    </Grid>
-                  )}
-                  <Table>
-                    <TableHead>
-                      <TableRow>
-                        <TableCell>#</TableCell>
-                        <TableCell>Student</TableCell>
-                        <TableCell>Title</TableCell>
-                        <TableCell>Score</TableCell>
-                        <TableCell>Date</TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {(marks || []).map((m, idx) => {
-                        const student = students.find(s => s.id === m.student_id);
-                        return (
-                          <TableRow key={m.id || idx}>
-                            <TableCell>{idx + 1}</TableCell>
-                            <TableCell>{student?.name || m.student_id}</TableCell>
-                            <TableCell>{m.title}</TableCell>
-                            <TableCell>{m.marks_obtained}/{m.total_marks}</TableCell>
-                            <TableCell>{m.date}</TableCell>
-                          </TableRow>
-                        );
-                      })}
-                    </TableBody>
-                  </Table>
-                </Card>
-              )}
-
-              {tab === (isTeacher ? 3 : 1) && (
-                <Card sx={{ p: 2 }}>
-                  <Typography variant="h6">Students ({students.length})</Typography>
-                  <Divider sx={{ my: 1 }} />
-                  {students.length === 0 && <Alert severity="info">No students in classroom yet.</Alert>}
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                    <Box>
+                      <Typography variant="h6" gutterBottom style={{ margin: 0 }}>People</Typography>
+                      <Typography variant="body2" color="textSecondary">
+                        Total: {people.length} people in this classroom
+                      </Typography>
+                    </Box>
+                    <Button
+                      variant="contained"
+                      startIcon={<Download />}
+                      onClick={handleDownloadPeople}
+                      disabled={people.length === 0}
+                    >
+                      Download CSV
+                    </Button>
+                  </Box>
                   <Table>
                     <TableHead>
                       <TableRow>
                         <TableCell>Name</TableCell>
-                        <TableCell>Student ID</TableCell>
+                        <TableCell>ID</TableCell>
                         <TableCell>Email</TableCell>
+                        <TableCell>Role</TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
-                      {students.map(s => (
-                        <TableRow key={s.id}>
-                          <TableCell>{s.name}</TableCell>
-                          <TableCell>{s.student_number}</TableCell>
-                          <TableCell>{s.email}</TableCell>
+                      {people.map(person => (
+                        <TableRow key={person.id}>
+                          <TableCell>{person.name}</TableCell>
+                          <TableCell>{person.student_number || person.id}</TableCell>
+                          <TableCell>{person.email || '-'}</TableCell>
+                          <TableCell>
+                            <Chip 
+                              label={person.role === 'teacher' ? 'Teacher' : 'Student'} 
+                              color={person.role === 'teacher' ? 'secondary' : 'primary'} 
+                              size="small" 
+                            />
+                          </TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
                   </Table>
+                  {people.length === 0 && (
+                    <Alert severity="info">No people enrolled yet.</Alert>
+                  )}
                 </Card>
               )}
+
+              {tab === assignmentsTab && (
+                <Assignments classroomId={selectedId} onDataChange={handleAssignmentDataChange} />
+              )}
+
+              {tab === gradesTab && (
+                <Card sx={{ p: 2 }}>
+                  <Box display="flex" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={1} sx={{ mb: 2 }}>
+                    <Box>
+                      <Typography variant="h6">
+                        {isTeacher ? 'Gradebook' : 'My Grades'}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        {isTeacher
+                          ? 'Assignment grades sync here automatically when you grade a submission.'
+                          : 'Assignment scores and manual marks appear together in one running record.'}
+                      </Typography>
+                    </Box>
+                    <Chip
+                      label={`${mStats.percentage}% overall`}
+                      color={mStats.percentage >= 60 ? 'success' : 'warning'}
+                      variant="outlined"
+                    />
+                  </Box>
+
+                  <Alert severity="info" sx={{ mb: 2 }}>
+                    {isTeacher
+                      ? 'Use manual entries for quizzes, vivas, or offline work. Assignment grading now updates this section automatically.'
+                      : 'Teacher feedback from graded assignments appears here whenever it is available.'}
+                  </Alert>
+
+                  <Grid container spacing={2} sx={{ mb: 2 }}>
+                    <Grid item xs={12} sm={6} lg={3}>
+                      <Card sx={{ p: 2 }}>
+                        <Typography variant="subtitle2">Overall Score</Typography>
+                        <Typography variant="h5">{mStats.totalGot}/{mStats.totalMax}</Typography>
+                        <Typography variant="caption">{mStats.percentage}% weighted total</Typography>
+                      </Card>
+                    </Grid>
+                    <Grid item xs={12} sm={6} lg={3}>
+                      <Card sx={{ p: 2 }}>
+                        <Typography variant="subtitle2">Assignment Synced</Typography>
+                        <Typography variant="h5">{mStats.assignmentCount}</Typography>
+                        <Typography variant="caption">Auto-created from assignment grading</Typography>
+                      </Card>
+                    </Grid>
+                    <Grid item xs={12} sm={6} lg={3}>
+                      <Card sx={{ p: 2 }}>
+                        <Typography variant="subtitle2">Manual Entries</Typography>
+                        <Typography variant="h5">{mStats.manualCount}</Typography>
+                        <Typography variant="caption">Quizzes, viva, class tests, lab checks</Typography>
+                      </Card>
+                    </Grid>
+                    <Grid item xs={12} sm={6} lg={3}>
+                      <Card sx={{ p: 2 }}>
+                        <Typography variant="subtitle2">{isTeacher ? 'Students Covered' : 'Average Grade'}</Typography>
+                        <Typography variant="h5">{isTeacher ? mStats.uniqueStudents : `${mStats.averagePercentage}%`}</Typography>
+                        <Typography variant="caption">
+                          {isTeacher ? `${mStats.totalRecords} grade records logged` : `${mStats.totalRecords} graded record(s)`}
+                        </Typography>
+                      </Card>
+                    </Grid>
+                  </Grid>
+
+                  {isTeacher && (
+                    <Card variant="outlined" sx={{ p: 2, mb: 2 }}>
+                      <Typography variant="subtitle1" sx={{ mb: 1 }}>Add Manual Grade</Typography>
+                      <Grid container spacing={1}>
+                        <Grid item xs={12} sm={4}>
+                          <FormControl fullWidth>
+                            <InputLabel>Student</InputLabel>
+                            <Select
+                              value={examForm.student_id}
+                              label="Student"
+                              onChange={(e) => setExamForm(prev => ({ ...prev, student_id: e.target.value }))}
+                            >
+                              {students.map(s => (
+                                <MenuItem key={s.id} value={s.id}>{s.name}</MenuItem>
+                              ))}
+                            </Select>
+                          </FormControl>
+                        </Grid>
+                        <Grid item xs={12} sm={3}>
+                          <TextField
+                            label="Title"
+                            value={examForm.title}
+                            onChange={(e) => setExamForm(prev => ({ ...prev, title: e.target.value }))}
+                            fullWidth
+                          />
+                        </Grid>
+                        <Grid item xs={6} sm={2}>
+                          <TextField
+                            label="Got"
+                            type="number"
+                            value={examForm.marks_obtained}
+                            onChange={(e) => setExamForm(prev => ({ ...prev, marks_obtained: e.target.value }))}
+                            fullWidth
+                          />
+                        </Grid>
+                        <Grid item xs={6} sm={2}>
+                          <TextField
+                            label="Total"
+                            type="number"
+                            value={examForm.total_marks}
+                            onChange={(e) => setExamForm(prev => ({ ...prev, total_marks: e.target.value }))}
+                            fullWidth
+                          />
+                        </Grid>
+                        <Grid item xs={12} sm={1}>
+                          <Button variant="contained" onClick={handleAddMarks} startIcon={<Add />} fullWidth>
+                            Save
+                          </Button>
+                        </Grid>
+                      </Grid>
+                    </Card>
+                  )}
+
+                  {marks.length === 0 ? (
+                    <Alert severity="info">
+                      {isTeacher
+                        ? 'No grades recorded yet. Grade an assignment or add the first manual mark.'
+                        : 'No grades have been published for this classroom yet.'}
+                    </Alert>
+                  ) : (
+                    <Table>
+                      <TableHead>
+                        <TableRow>
+                          <TableCell>#</TableCell>
+                          {isTeacher && <TableCell>Student</TableCell>}
+                          <TableCell>Grade Item</TableCell>
+                          <TableCell>Score</TableCell>
+                          <TableCell>Date</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {(marks || []).map((m, idx) => {
+                          const student = students.find(s => s.id === m.student_id);
+                          const studentLabel = m.student_name || student?.name || m.student_id;
+                          return (
+                            <TableRow key={m.id || idx}>
+                              <TableCell>{idx + 1}</TableCell>
+                              {isTeacher && (
+                                <TableCell>
+                                  <Typography variant="body2" sx={{ fontWeight: 600 }}>{studentLabel}</Typography>
+                                  <Typography variant="caption" color="text.secondary">
+                                    {m.student_number || student?.student_number || '-'}
+                                  </Typography>
+                                </TableCell>
+                              )}
+                              <TableCell>
+                                <Box display="flex" flexDirection="column" gap={0.75}>
+                                  <Box display="flex" alignItems="center" gap={1} flexWrap="wrap">
+                                    <Typography variant="body2" sx={{ fontWeight: 600 }}>{m.title}</Typography>
+                                    <Chip
+                                      label={m.source === 'assignment' ? 'Assignment Sync' : 'Manual'}
+                                      size="small"
+                                      color={getMarkSourceColor(m.source)}
+                                      variant="outlined"
+                                    />
+                                  </Box>
+                                  {m.feedback && (
+                                    <Typography variant="caption" color="text.secondary">
+                                      Feedback: {m.feedback}
+                                    </Typography>
+                                  )}
+                                </Box>
+                              </TableCell>
+                              <TableCell>
+                                <Chip
+                                  label={`${m.marks_obtained}/${m.total_marks}`}
+                                  size="small"
+                                  color={getMarkScoreColor(m)}
+                                />
+                              </TableCell>
+                              <TableCell>{new Date(m.date).toLocaleDateString()}</TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  )}
+                </Card>
+              )}
+
             </>
           )}
         </Grid>

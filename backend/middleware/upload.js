@@ -79,6 +79,27 @@ const uploadBusSchedule = multer({
   fileFilter: fileFilter(['csv']),
 });
 
+// Storage for assignment uploads
+const assignmentStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const dir = path.join(__dirname, '../uploads/assignments');
+    ensureDir(dir);
+    cb(null, dir);
+  },
+  filename: (req, file, cb) => {
+    const unique = Date.now() + '-' + Math.round(Math.random() * 1e6);
+    const ext = path.extname(file.originalname);
+    const base = path.basename(file.originalname, ext).replace(/[^a-zA-Z0-9-_]/g, '_');
+    cb(null, `${base}-${unique}${ext}`);
+  },
+});
+
+const uploadAssignment = multer({
+  storage: assignmentStorage,
+  limits: { fileSize: parseInt(process.env.MAX_FILE_SIZE) || 10 * 1024 * 1024 },
+  fileFilter: fileFilter(['pdf', 'doc', 'docx', 'ppt', 'pptx', 'xls', 'xlsx', 'txt', 'zip', 'jpg', 'jpeg', 'png', 'gif']),
+});
+
 // Error handling wrapper
 const handleUploadError = (uploadMiddleware) => (req, res, next) => {
   uploadMiddleware(req, res, (err) => {
@@ -99,4 +120,5 @@ module.exports = {
   uploadResource: handleUploadError(uploadResource.single('file')),
   uploadRoutine: handleUploadError(uploadRoutine.single('routine')),
   uploadBusSchedule: handleUploadError(uploadBusSchedule.single('schedule')),
+  uploadAssignment: handleUploadError(uploadAssignment.single('file')),
 };

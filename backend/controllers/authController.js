@@ -149,7 +149,7 @@ exports.changePassword = async (req, res) => {
 // GET /api/auth/users (admin only)
 exports.getAllUsers = async (req, res) => {
   try {
-    const users = await userRepo.findActive();
+    const users = await userRepo.findAllForAdmin();
     res.json({ success: true, users });
   } catch (err) {
     res.status(500).json({ success: false, message: 'Server error.' });
