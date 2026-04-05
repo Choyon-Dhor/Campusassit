@@ -2,8 +2,7 @@
 // config/database.js — Singleton Pattern — PostgreSQL via pg
 // ============================================================
 const { Pool } = require('pg');
-const path = require('path');
-require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
+require('./env');
 
 class Database {
   constructor() {
@@ -16,10 +15,15 @@ class Database {
   }
 
   _init() {
-    const config = process.env.DATABASE_URL
+    const databaseUrl = process.env.DATABASE_URL;
+    const shouldUseSsl = process.env.DB_SSL
+      ? process.env.DB_SSL === 'true'
+      : Boolean(databaseUrl && /supabase\.co/i.test(databaseUrl)) || process.env.NODE_ENV === 'production';
+
+    const config = databaseUrl
       ? {
-          connectionString: process.env.DATABASE_URL,
-          ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+          connectionString: databaseUrl,
+          ssl: shouldUseSsl ? { rejectUnauthorized: false } : false,
         }
       : {
           host:     process.env.DB_HOST     || 'localhost',
