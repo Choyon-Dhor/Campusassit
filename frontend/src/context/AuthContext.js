@@ -1,28 +1,29 @@
 // ============================================================
 // src/context/AuthContext.js
 // ============================================================
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { authService } from '../services/api';
+import { clearStoredAuth, getStoredToken, getStoredUser, persistAuth } from '../services/authStorage';
 
 const AuthContext = createContext(null);
 
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(() => {
-    const saved = localStorage.getItem('campusassist_user');
-    try { return saved ? JSON.parse(saved) : null; } catch { return null; }
-  });
+  const [user, setUser] = useState(() => getStoredUser());
   const [loading, setLoading] = useState(true);
-  const [token, setToken] = useState(localStorage.getItem('campusassist_token'));
+  const [token, setToken] = useState(getStoredToken());
 
   const loadUser = useCallback(async () => {
-    const savedToken = localStorage.getItem('campusassist_token');
-    if (!savedToken) { setLoading(false); return; }
+    const savedToken = getStoredToken();
+    if (!savedToken) {
+      setLoading(false);
+      return;
+    }
+
     try {
       const res = await authService.getMe();
       setUser(res.data.user);
     } catch {
-      localStorage.removeItem('campusassist_token');
-      localStorage.removeItem('campusassist_user');
+      clearStoredAuth();
       setUser(null);
       setToken(null);
     } finally {
@@ -30,36 +31,35 @@ export const AuthProvider = ({ children }) => {
     }
   }, []);
 
-  useEffect(() => { loadUser(); }, [loadUser]);
+  useEffect(() => {
+    loadUser();
+  }, [loadUser]);
 
-  const login = async (email, password) => {
+  const login = async (email, password, options = {}) => {
     const res = await authService.login({ email, password });
     const { token: newToken, user: newUser } = res.data;
-    localStorage.setItem('campusassist_token', newToken);
-    localStorage.setItem('campusassist_user', JSON.stringify(newUser));
+    persistAuth(newToken, newUser, options);
     setToken(newToken);
     setUser(newUser);
     return newUser;
   };
 
-  const register = async (data) => {
+  const register = async (data, options = {}) => {
     const res = await authService.register(data);
     const { token: newToken, user: newUser } = res.data;
-    localStorage.setItem('campusassist_token', newToken);
-    localStorage.setItem('campusassist_user', JSON.stringify(newUser));
+    persistAuth(newToken, newUser, options);
     setToken(newToken);
     setUser(newUser);
     return newUser;
   };
 
   const logout = () => {
-    localStorage.removeItem('campusassist_token');
-    localStorage.removeItem('campusassist_user');
+    clearStoredAuth();
     setToken(null);
     setUser(null);
   };
 
-  const updateUser = (updated) => setUser(prev => ({ ...prev, ...updated }));
+  const updateUser = (updated) => setUser((prev) => ({ ...prev, ...updated }));
 
   const isAdmin = user?.role === 'admin';
   const isTeacher = user?.role === 'teacher';
@@ -67,11 +67,22 @@ export const AuthProvider = ({ children }) => {
   const isTeacherOrAdmin = isTeacher || isAdmin;
 
   return (
-    <AuthContext.Provider value={{
-      user, token, loading, login, register, logout, updateUser,
-      isAdmin, isTeacher, isStudent, isTeacherOrAdmin,
-      isAuthenticated: !!user,
-    }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        token,
+        loading,
+        login,
+        register,
+        logout,
+        updateUser,
+        isAdmin,
+        isTeacher,
+        isStudent,
+        isTeacherOrAdmin,
+        isAuthenticated: !!user,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

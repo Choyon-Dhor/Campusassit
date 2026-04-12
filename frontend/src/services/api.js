@@ -3,6 +3,7 @@
 // ============================================================
 import axios from 'axios';
 import { toast } from 'react-toastify';
+import { clearStoredAuth, getStoredToken } from './authStorage';
 
 const BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 
@@ -15,7 +16,7 @@ const api = axios.create({
 // Request interceptor — attach JWT
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('campusassist_token');
+    const token = getStoredToken();
     if (token) config.headers.Authorization = `Bearer ${token}`;
     return config;
   },
@@ -28,8 +29,7 @@ api.interceptors.response.use(
   (error) => {
     const msg = error.response?.data?.message || 'Network error occurred';
     if (error.response?.status === 401) {
-      localStorage.removeItem('campusassist_token');
-      localStorage.removeItem('campusassist_user');
+      clearStoredAuth();
       window.location.href = '/login';
     } else if (error.response?.status === 403) {
       toast.error('Permission denied.');
@@ -40,7 +40,7 @@ api.interceptors.response.use(
   }
 );
 
-// ── Auth ──────────────────────────────────────────────────────
+// Auth
 export const authService = {
   login: (data) => api.post('/auth/login', data),
   register: (data) => api.post('/auth/register', data),
@@ -52,7 +52,7 @@ export const authService = {
   toggleUserActive: (id) => api.patch(`/auth/admin/users/${id}/toggle`),
 };
 
-// ── Announcements ─────────────────────────────────────────────
+// Announcements
 export const announcementService = {
   getAll: (params) => api.get('/announcements', { params }),
   create: (data) => api.post('/announcements', data),
@@ -60,7 +60,7 @@ export const announcementService = {
   delete: (id) => api.delete(`/announcements/${id}`),
 };
 
-// ── Classrooms ────────────────────────────────────────────────
+// Classrooms
 export const classroomService = {
   getFreeRooms: (params) => api.get('/classrooms/free', { params }),
   getAllRooms: () => api.get('/classrooms/rooms'),
@@ -72,7 +72,6 @@ export const classroomService = {
   }),
   downloadTemplate: () => api.get('/classrooms/routine/template', { responseType: 'blob' }),
 
-  // Smart Classroom APIs
   createClassroom: (data) => api.post('/classrooms/create', data),
   updateClassroom: (id, data) => api.put(`/classrooms/${id}`, data),
   deleteClassroom: (id) => api.delete(`/classrooms/${id}`),
@@ -91,7 +90,8 @@ export const classroomService = {
   addResource: (classroomId, data) => api.post(`/classrooms/${classroomId}/resources`, data),
   listResources: (classroomId) => api.get(`/classrooms/${classroomId}/resources`),
 };
-// ── Assignments ───────────────────────────────────────────────
+
+// Assignments
 export const assignmentService = {
   createAssignment: (formData) => api.post('/assignments', formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
@@ -110,10 +110,11 @@ export const assignmentService = {
   downloadAssignment: (assignmentId) => api.get(`/assignments/${assignmentId}/download`, { responseType: 'blob' }),
   downloadSubmission: (submissionId) => api.get(`/assignments/submissions/${submissionId}/download`, { responseType: 'blob' }),
   getMySubmission: (assignmentId) => api.get('/assignments/my-submission', {
-    params: { assignment_id: assignmentId }
+    params: { assignment_id: assignmentId },
   }),
 };
-  // ── Resources ─────────────────────────────────────────────────
+
+// Resources
 export const resourceService = {
   getAll: (params) => api.get('/resources', { params }),
   getById: (id) => api.get(`/resources/${id}`),
@@ -126,7 +127,7 @@ export const resourceService = {
   getRecommendations: (params) => api.get('/resources/recommendations', { params }),
 };
 
-// ── Study Groups ──────────────────────────────────────────────
+// Study Groups
 export const studyGroupService = {
   getAll: () => api.get('/study-groups'),
   create: (data) => api.post('/study-groups', data),
@@ -144,11 +145,11 @@ export const studyGroupService = {
   getResources: (id) => api.get(`/study-groups/${id}/resources`),
   postResource: (id, data) => api.post(`/study-groups/${id}/resources`, data),
   getActivity: (id) => api.get(`/study-groups/${id}/activity`),
-  getById:    (id) => api.get(`/study-groups/${id}`),
+  getById: (id) => api.get(`/study-groups/${id}`),
   delete: (id) => api.delete(`/study-groups/${id}`),
 };
 
-// ── Deadlines ─────────────────────────────────────────────────
+// Deadlines
 export const deadlineService = {
   getAll: (params) => api.get('/deadlines', { params }),
   getUpcoming: (params) => api.get('/deadlines/upcoming', { params }),
@@ -158,7 +159,7 @@ export const deadlineService = {
   toggleComplete: (id) => api.patch(`/deadlines/${id}/toggle`),
 };
 
-// ── Consultations ─────────────────────────────────────────────
+// Consultations
 export const consultationService = {
   getHours: () => api.get('/consultations/hours'),
   createHours: (data) => api.post('/consultations/hours', data),
@@ -167,60 +168,62 @@ export const consultationService = {
   updateStatus: (id, data) => api.patch(`/consultations/appointments/${id}/status`, data),
 };
 
-// ── Notifications ─────────────────────────────────────────────
+// Notifications
 export const notificationService = {
   getAll: (params) => api.get('/notifications', { params }),
   markRead: (id) => api.patch(`/notifications/${id}/read`),
   markAllRead: () => api.patch('/notifications/read-all'),
 };
 
-// ── Dashboard ─────────────────────────────────────────────────
+// Dashboard
 export const dashboardService = {
   getStats: () => api.get('/dashboard/stats'),
 };
 
 export default api;
 
-// ── Results ───────────────────────────────────────────────────
+// Results
 export const resultService = {
-  getMyResults:         ()             => api.get('/results/me'),
-  getSemesters:         ()             => api.get('/results/semesters'),
-  getStudentList:       (params)       => api.get('/results/students', { params }),
-  getByStudentNumber:   (num, params)  => api.get(`/results/student/${num}`, { params }),
-  uploadResult:         (data)         => api.post('/results/upload', data),
-  bulkSave:             (data)         => api.post('/results/bulk-save', data),
-  updateResult:         (id, data)     => api.put(`/results/${id}`, data),
-  deleteResult:         (id)           => api.delete(`/results/${id}`),
-  publishResult:        (id)           => api.patch(`/results/${id}/publish`),
-  publishSemester:      (data)         => api.patch('/results/publish-semester', data),
-  importCSV:            (formData)     => api.post('/results/import-csv', formData, {
+  getMyResults: () => api.get('/results/me'),
+  getSemesters: () => api.get('/results/semesters'),
+  getStudentList: (params) => api.get('/results/students', { params }),
+  getByStudentNumber: (num, params) => api.get(`/results/student/${num}`, { params }),
+  uploadResult: (data) => api.post('/results/upload', data),
+  bulkSave: (data) => api.post('/results/bulk-save', data),
+  updateResult: (id, data) => api.put(`/results/${id}`, data),
+  deleteResult: (id) => api.delete(`/results/${id}`),
+  publishResult: (id) => api.patch(`/results/${id}/publish`),
+  publishSemester: (data) => api.patch('/results/publish-semester', data),
+  importCSV: (formData) => api.post('/results/import-csv', formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
   }),
-  downloadCSVTemplate:  ()             => {
+  downloadCSVTemplate: () => {
     const header = 'student_number,course_code,course_title,credit_hours,letter_grade,batch_section\n';
     const example = '231-115-094,CSE-421,Artificial Intelligence,3,A+,58th[C]\n';
     const blob = new Blob([header + example], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.href = url; a.download = 'result_import_template.csv'; a.click();
+    a.href = url;
+    a.download = 'result_import_template.csv';
+    a.click();
     URL.revokeObjectURL(url);
   },
 };
 
-// ── Bus ───────────────────────────────────────────────────────
+// Bus
 export const busService = {
-  getSchedule:  ()       => api.get('/bus/schedule'),
-  getRoutes:    (params) => api.get('/bus/routes', { params }),
-  getNextBuses: ()       => api.get('/bus/next'),
+  getSchedule: () => api.get('/bus/schedule'),
+  getRoutes: (params) => api.get('/bus/routes', { params }),
+  getNextBuses: () => api.get('/bus/next'),
   uploadSchedule: (formData) => api.post('/bus/schedule/upload', formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
   }),
 };
 
-// ── Batch Routine ─────────────────────────────────────────────
+// Batch Routine
 export const batchRoutineService = {
-  getBatches:       ()                  => api.get('/batch-routine/batches'),
-  getRoutine:       (batch, section, p) => api.get(`/batch-routine/${batch}/${section}`, { params: p }),
-  getTodayClasses:  (batch, section)    => api.get(`/batch-routine/today/${batch}/${section}`),
-  getFreeRooms:     (params)            => api.get('/batch-routine/free-rooms', { params }),
+  getBatches: () => api.get('/batch-routine/batches'),
+  getRoutine: (batch, section, p) => api.get(`/batch-routine/${batch}/${section}`, { params: p }),
+  getTodayClasses: (batch, section) => api.get(`/batch-routine/today/${batch}/${section}`),
+  getFreeRooms: (params) => api.get('/batch-routine/free-rooms', { params }),
 };
