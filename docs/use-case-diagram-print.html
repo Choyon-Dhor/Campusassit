@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>CampusAssist Use Case Diagram - Print</title>
+  <style>
+    @page {
+      size: A4 landscape;
+      margin: 7mm;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: #edf0f2;
+      color: #263238;
+      font-family: Arial, Helvetica, sans-serif;
+    }
+
+    .toolbar {
+      align-items: center;
+      background: #263238;
+      color: #ffffff;
+      display: flex;
+      gap: 16px;
+      justify-content: space-between;
+      padding: 12px 20px;
+    }
+
+    .toolbar p {
+      font-size: 14px;
+      line-height: 1.4;
+      margin: 0;
+    }
+
+    .toolbar button {
+      background: #ffffff;
+      border: 0;
+      border-radius: 4px;
+      color: #263238;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 700;
+      padding: 9px 14px;
+      white-space: nowrap;
+    }
+
+    .sheet {
+      background: #ffffff;
+      box-shadow: 0 12px 34px rgba(38, 50, 56, 0.16);
+      margin: 14px auto;
+      padding: 7mm;
+      width: 297mm;
+    }
+
+    .diagram {
+      display: block;
+      height: auto;
+      width: 100%;
+    }
+
+    svg text {
+      fill: #263238;
+      font-family: Arial, Helvetica, sans-serif;
+    }
+
+    .title {
+      font-size: 30px;
+      font-weight: 700;
+      letter-spacing: 0;
+    }
+
+    .subtitle {
+      fill: #54636b;
+      font-size: 14px;
+    }
+
+    .system {
+      fill: #ffffff;
+      stroke: #263238;
+      stroke-width: 2.4;
+    }
+
+    .system-title {
+      font-size: 17px;
+      font-weight: 700;
+    }
+
+    .package {
+      fill: #fafafa;
+      stroke: #263238;
+      stroke-width: 1.3;
+    }
+
+    .package-title {
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .association {
+      fill: none;
+      stroke: #45545b;
+      stroke-width: 1.1;
+    }
+
+    .relation {
+      fill: none;
+      marker-end: url(#arrow);
+      stroke: #45545b;
+      stroke-dasharray: 5 5;
+      stroke-width: 1;
+    }
+
+    .relation-label {
+      fill: #45545b;
+      font-size: 8.5px;
+      font-weight: 700;
+    }
+
+    .relation-label-bg {
+      fill: #ffffff;
+      stroke: #ffffff;
+      stroke-width: 3;
+    }
+
+    .usecase ellipse {
+      fill: #ffffff;
+      stroke: #263238;
+      stroke-width: 1.35;
+    }
+
+    .usecase text {
+      font-size: 10.5px;
+      font-weight: 700;
+      text-anchor: middle;
+    }
+
+    .actor-line {
+      fill: none;
+      stroke: #263238;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      stroke-width: 2.8;
+    }
+
+    .actor-label {
+      font-size: 15px;
+      font-weight: 700;
+      text-anchor: middle;
+    }
+
+    .legend-box {
+      fill: #ffffff;
+      stroke: #263238;
+      stroke-width: 1;
+    }
+
+    .legend-text {
+      fill: #45545b;
+      font-size: 10px;
+    }
+
+    @media print {
+      body {
+        background: #ffffff;
+      }
+
+      .toolbar {
+        display: none;
+      }
+
+      .sheet {
+        box-shadow: none;
+        margin: 0;
+        padding: 0;
+        width: auto;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="toolbar">
+    <p>One-page UML-style use case diagram. Print with A4 landscape and Fit to page.</p>
+    <button type="button" onclick="window.print()">Print / Save as PDF</button>
+  </div>
+
+  <main class="sheet">
+    <svg id="diagram" class="diagram" viewBox="0 0 1600 1000" role="img" aria-labelledby="diagram-title diagram-desc" xmlns="http://www.w3.org/2000/svg">
+      <title id="diagram-title">CampusAssist use case diagram</title>
+      <desc id="diagram-desc">A one-page printable UML use case diagram for the CampusAssist academic management platform.</desc>
+      <defs>
+        <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="#45545b"></path>
+        </marker>
+      </defs>
+    </svg>
+  </main>
+
+  <script>
+    const NS = "http://www.w3.org/2000/svg";
+    const svg = document.getElementById("diagram");
+
+    const packages = [
+      { label: "Access", x: 220, y: 150, w: 220, h: 455 },
+      { label: "Student Services", x: 470, y: 150, w: 245, h: 640 },
+      { label: "Resources and Groups", x: 745, y: 150, w: 240, h: 550 },
+      { label: "Teaching and Classroom", x: 1010, y: 150, w: 230, h: 690 },
+      { label: "Administration", x: 1265, y: 150, w: 165, h: 575 }
+    ];
+
+    const actors = {
+      guest: { label: "Guest", x: 78, y: 225, side: "left" },
+      student: { label: "Student", x: 78, y: 615, side: "left" },
+      teacher: { label: "Teacher", x: 1522, y: 365, side: "right" },
+      admin: { label: "Admin", x: 1522, y: 675, side: "right" }
+    };
+
+    const useCases = [
+      { id: "landing", label: "View Landing\nPage", x: 330, y: 205 },
+      { id: "register", label: "Register", x: 330, y: 265 },
+      { id: "login", label: "Login", x: 330, y: 325 },
+      { id: "auth", label: "Authenticate\nUser", x: 330, y: 385 },
+      { id: "dashboard", label: "View Dashboard", x: 330, y: 445 },
+      { id: "profile", label: "Manage Profile", x: 330, y: 505 },
+      { id: "notifications", label: "View\nNotifications", x: 330, y: 565 },
+
+      { id: "academic", label: "View Academic\nInformation", x: 592, y: 205 },
+      { id: "routine", label: "View Routine", x: 592, y: 265 },
+      { id: "results", label: "View Results", x: 592, y: 325 },
+      { id: "freeRooms", label: "View Free\nClassrooms", x: 592, y: 385 },
+      { id: "bus", label: "View Bus\nSchedule", x: 592, y: 445 },
+      { id: "smartAccess", label: "Access Smart\nClassrooms", x: 592, y: 515 },
+      { id: "bookConsult", label: "Book\nConsultations", x: 592, y: 585 },
+      { id: "deadlines", label: "Manage Personal\nDeadlines", x: 592, y: 655 },
+      { id: "submitAssignments", label: "Submit\nAssignments", x: 592, y: 725 },
+
+      { id: "viewAnnouncements", label: "View\nAnnouncements", x: 865, y: 205 },
+      { id: "resources", label: "Access\nResources", x: 865, y: 265 },
+      { id: "downloadResources", label: "Download\nResources", x: 865, y: 325 },
+      { id: "rateResources", label: "Rate\nResources", x: 865, y: 385 },
+      { id: "studyGroups", label: "Participate in\nStudy Groups", x: 865, y: 465 },
+      { id: "groupMessages", label: "Send Group\nMessages", x: 865, y: 535 },
+      { id: "groupReact", label: "React/Comment\nin Groups", x: 865, y: 605 },
+      { id: "uploadResources", label: "Upload\nResources", x: 865, y: 665 },
+
+      { id: "manageAnnouncements", label: "Manage\nAnnouncements", x: 1125, y: 205 },
+      { id: "createConsult", label: "Create Consultation\nHours", x: 1125, y: 275 },
+      { id: "manageAssignments", label: "Manage\nAssignments", x: 1125, y: 345 },
+      { id: "gradeSubmissions", label: "Review/Grade\nSubmissions", x: 1125, y: 405 },
+      { id: "manageSmart", label: "Manage Smart\nClassroom", x: 1125, y: 485 },
+      { id: "createClassroom", label: "Create Smart\nClassroom", x: 1125, y: 545 },
+      { id: "uploadStudents", label: "Upload Students\nto Classroom", x: 1125, y: 605 },
+      { id: "attendance", label: "Mark\nAttendance", x: 1125, y: 665 },
+      { id: "marks", label: "Add Marks", x: 1125, y: 725 },
+      { id: "classPosts", label: "Post Classroom\nPosts", x: 1125, y: 785 },
+
+      { id: "manageResults", label: "Manage Results", x: 1348, y: 205, rx: 75 },
+      { id: "publishResults", label: "Publish Results", x: 1348, y: 265, rx: 75 },
+      { id: "manageUsers", label: "Manage Users", x: 1348, y: 335, rx: 75 },
+      { id: "toggleUsers", label: "Activate/Deactivate\nUsers", x: 1348, y: 395, rx: 75 },
+      { id: "manageSchedules", label: "Manage\nSchedules", x: 1348, y: 475, rx: 75 },
+      { id: "uploadRoutine", label: "Upload Routine\nCSV", x: 1348, y: 535, rx: 75 },
+      { id: "uploadBus", label: "Upload Bus\nSchedule", x: 1348, y: 595, rx: 75 },
+      { id: "operations", label: "Oversee\nOperations", x: 1348, y: 665, rx: 75 }
+    ];
+
+    const associations = [
+      ["guest", "landing"], ["guest", "register"], ["guest", "login"],
+      ["student", "login"], ["student", "dashboard"], ["student", "profile"], ["student", "notifications"],
+      ["student", "academic"], ["student", "smartAccess"], ["student", "resources"], ["student", "studyGroups"],
+      ["student", "bookConsult"], ["student", "deadlines"], ["student", "submitAssignments"],
+      ["teacher", "login"], ["teacher", "dashboard"], ["teacher", "profile"], ["teacher", "notifications"],
+      ["teacher", "viewAnnouncements"], ["teacher", "manageAnnouncements"], ["teacher", "uploadResources"],
+      ["teacher", "studyGroups"], ["teacher", "createConsult"], ["teacher", "manageAssignments"],
+      ["teacher", "manageSmart"], ["teacher", "manageResults"],
+      ["admin", "login"], ["admin", "dashboard"], ["admin", "profile"], ["admin", "notifications"],
+      ["admin", "manageAnnouncements"], ["admin", "manageSmart"], ["admin", "manageUsers"],
+      ["admin", "manageSchedules"], ["admin", "publishResults"], ["admin", "operations"]
+    ];
+
+    const relations = [
+      ["login", "auth", "<<include>>", 390, 356, { side: "right", lane: 10 }],
+      ["academic", "routine", "<<include>>", 664, 236, { side: "right", lane: 10 }],
+      ["academic", "results", "<<include>>", 672, 296, { side: "right", lane: 18 }],
+      ["academic", "freeRooms", "<<include>>", 680, 356, { side: "right", lane: 26 }],
+      ["academic", "bus", "<<include>>", 688, 416, { side: "right", lane: 34 }],
+      ["downloadResources", "resources", "<<extend>>", 934, 296, { side: "right", lane: 12 }],
+      ["rateResources", "resources", "<<extend>>", 944, 356, { side: "right", lane: 20 }],
+      ["studyGroups", "groupMessages", "<<include>>", 935, 500, { side: "right", lane: 12 }],
+      ["studyGroups", "groupReact", "<<include>>", 944, 570, { side: "right", lane: 22 }],
+      ["manageAssignments", "gradeSubmissions", "<<include>>", 1192, 376, { side: "right", lane: 10 }],
+      ["manageSmart", "createClassroom", "<<include>>", 1192, 518, { side: "right", lane: 10 }],
+      ["manageSmart", "uploadStudents", "<<include>>", 1200, 578, { side: "right", lane: 16 }],
+      ["manageSmart", "attendance", "<<include>>", 1208, 638, { side: "right", lane: 22 }],
+      ["manageSmart", "marks", "<<include>>", 1216, 698, { side: "right", lane: 28 }],
+      ["manageSmart", "classPosts", "<<include>>", 1224, 758, { side: "right", lane: 34 }],
+      ["manageResults", "publishResults", "<<include>>", 1404, 236, { side: "right", lane: 18 }],
+      ["manageUsers", "toggleUsers", "<<include>>", 1404, 366, { side: "right", lane: 18 }],
+      ["manageSchedules", "uploadRoutine", "<<include>>", 1404, 506, { side: "right", lane: 18 }],
+      ["manageSchedules", "uploadBus", "<<include>>", 1404, 566, { side: "right", lane: 24 }]
+    ];
+
+    const byId = Object.fromEntries(useCases.map((item) => [item.id, item]));
+    const relationLabels = [];
+
+    function node(name, attrs = {}) {
+      const element = document.createElementNS(NS, name);
+      Object.entries(attrs).forEach(([key, value]) => element.setAttribute(key, value));
+      return element;
+    }
+
+    function add(name, attrs = {}, parent = svg) {
+      const element = node(name, attrs);
+      parent.appendChild(element);
+      return element;
+    }
+
+    function addText(text, x, y, className, parent = svg, anchor = "middle") {
+      const element = add("text", { x, y, class: className, "text-anchor": anchor }, parent);
+      element.textContent = text;
+      return element;
+    }
+
+    function addMultilineText(text, x, y, className, parent = svg) {
+      const lines = text.split("\n");
+      const element = add("text", { x, y, class: className, "text-anchor": "middle" }, parent);
+      const start = y - ((lines.length - 1) * 6);
+      lines.forEach((line, index) => {
+        const tspan = node("tspan", { x, y: start + index * 13 });
+        tspan.textContent = line;
+        element.appendChild(tspan);
+      });
+      return element;
+    }
+
+    function usecaseEdge(from, to, fromTowardTo) {
+      const dx = to.x - from.x;
+      const dy = to.y - from.y;
+      const rx = from.rx || 86;
+      const ry = from.ry || 24;
+      const scale = 1 / Math.sqrt((dx * dx) / (rx * rx) + (dy * dy) / (ry * ry));
+      const direction = fromTowardTo ? 1 : -1;
+      return { x: from.x + dx * scale * direction, y: from.y + dy * scale * direction };
+    }
+
+    function usecaseSideEdge(item, side) {
+      const rx = item.rx || 86;
+      return {
+        x: side === "left" ? item.x - rx : item.x + rx,
+        y: item.y
+      };
+    }
+
+    function actorAnchor(actor) {
+      return {
+        x: actor.side === "left" ? actor.x + 36 : actor.x - 36,
+        y: actor.y + 42
+      };
+    }
+
+    function drawActor(actor) {
+      const g = add("g", {});
+      add("circle", { cx: actor.x, cy: actor.y, r: 17, class: "actor-line" }, g);
+      add("line", { x1: actor.x, y1: actor.y + 17, x2: actor.x, y2: actor.y + 75, class: "actor-line" }, g);
+      add("line", { x1: actor.x - 33, y1: actor.y + 42, x2: actor.x + 33, y2: actor.y + 42, class: "actor-line" }, g);
+      add("line", { x1: actor.x, y1: actor.y + 75, x2: actor.x - 26, y2: actor.y + 118, class: "actor-line" }, g);
+      add("line", { x1: actor.x, y1: actor.y + 75, x2: actor.x + 26, y2: actor.y + 118, class: "actor-line" }, g);
+      addMultilineText(actor.label, actor.x, actor.y + 146, "actor-label", g);
+    }
+
+    function drawUseCase(item) {
+      const rx = item.rx || 86;
+      const ry = item.ry || 24;
+      const g = add("g", { class: "usecase" });
+      add("ellipse", { cx: item.x, cy: item.y, rx, ry }, g);
+      addMultilineText(item.label, item.x, item.y + 4, "", g);
+    }
+
+    function drawAssociation(actorKey, useCaseId) {
+      const actor = actors[actorKey];
+      const target = byId[useCaseId];
+      const start = actorAnchor(actor);
+      add("line", { x1: start.x, y1: start.y, x2: target.x, y2: target.y, class: "association" });
+    }
+
+    function drawRelation(fromId, toId, label, labelX, labelY, route = {}) {
+      const from = byId[fromId];
+      const to = byId[toId];
+      if (route.side) {
+        const start = usecaseSideEdge(from, route.side);
+        const end = usecaseSideEdge(to, route.side);
+        const lane = route.lane || 16;
+        const controlX = route.side === "left"
+          ? Math.min(start.x, end.x) - lane
+          : Math.max(start.x, end.x) + lane;
+        add("path", {
+          d: `M ${start.x} ${start.y} C ${controlX} ${start.y}, ${controlX} ${end.y}, ${end.x} ${end.y}`,
+          class: "relation"
+        });
+      } else {
+        const start = usecaseEdge(from, to, true);
+        const end = usecaseEdge(to, from, true);
+        add("line", { x1: start.x, y1: start.y, x2: end.x, y2: end.y, class: "relation" });
+      }
+      relationLabels.push({ label, x: labelX, y: labelY });
+    }
+
+    function drawRelationLabel({ label, x, y }) {
+      const width = Math.max(52, label.length * 5.1 + 8);
+      const height = 14;
+      const g = add("g", {});
+      add("rect", {
+        x: x - width / 2,
+        y: y - 10.5,
+        width,
+        height,
+        rx: 2,
+        class: "relation-label-bg"
+      }, g);
+      addText(label, x, y, "relation-label", g);
+    }
+
+    addText("CampusAssist Use Case Diagram", 800, 42, "title");
+    addText("Smart Academic Management and Collaboration Platform", 800, 67, "subtitle");
+    add("rect", { x: 165, y: 105, width: 1270, height: 805, class: "system" });
+    addText("CampusAssist System", 800, 132, "system-title");
+
+    packages.forEach((box) => {
+      add("rect", { x: box.x, y: box.y, width: box.w, height: box.h, class: "package" });
+      addText(box.label, box.x + box.w / 2, box.y + 24, "package-title");
+    });
+
+    associations.forEach(([actorKey, useCaseId]) => drawAssociation(actorKey, useCaseId));
+    useCases.forEach(drawUseCase);
+    relations.forEach((item) => drawRelation(...item));
+    relationLabels.forEach(drawRelationLabel);
+    Object.values(actors).forEach(drawActor);
+
+  </script>
+</body>
+</html>

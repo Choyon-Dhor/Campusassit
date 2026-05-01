@@ -1,0 +1,171 @@
+@startuml
+left to right direction
+skinparam packageStyle rectangle
+skinparam shadowing false
+skinparam actorStyle awesome
+
+title CampusAssist Use Case Diagram
+
+actor Guest
+actor Student
+actor Teacher
+actor Admin
+
+rectangle "CampusAssist System" {
+
+  usecase "View Landing Page" as UC_Landing
+  usecase "Register" as UC_Register
+  usecase "Login" as UC_Login
+  usecase "Authenticate User" as UC_Auth
+
+  usecase "View Dashboard" as UC_Dashboard
+  usecase "Manage Profile" as UC_Profile
+  usecase "View Notifications" as UC_Notifications
+
+  usecase "View Announcements" as UC_ViewAnnouncements
+  usecase "Manage Announcements" as UC_ManageAnnouncements
+
+  usecase "View Routine" as UC_Routine
+  usecase "View Results" as UC_Results
+  usecase "View Free Classrooms" as UC_FreeRooms
+  usecase "Access Smart Classrooms" as UC_AccessSmartClass
+  usecase "Manage Smart Classroom" as UC_ManageSmartClass
+
+  usecase "Access Resources" as UC_Resources
+  usecase "Upload Resources" as UC_UploadResources
+  usecase "Download Resources" as UC_DownloadResources
+  usecase "Rate Resources" as UC_RateResources
+
+  usecase "Join/Leave Study Groups" as UC_JoinGroups
+  usecase "Participate in Study Groups" as UC_StudyGroups
+  usecase "Send Group Messages" as UC_GroupMessages
+  usecase "React/Comment in Groups" as UC_GroupReact
+
+  usecase "Manage Personal Deadlines" as UC_Deadlines
+  usecase "Book Consultations" as UC_BookConsult
+  usecase "Create Consultation Hours" as UC_CreateConsult
+  usecase "View Bus Schedule" as UC_Bus
+  usecase "Submit Assignments" as UC_SubmitAssignment
+  usecase "Manage Assignments" as UC_ManageAssignments
+  usecase "Review/Grade Submissions" as UC_GradeSubmissions
+
+  usecase "Manage Results" as UC_ManageResults
+  usecase "Upload / Import / Publish Results" as UC_PublishResults
+
+  usecase "Manage Users" as UC_ManageUsers
+  usecase "Activate/Deactivate Users" as UC_ToggleUsers
+  usecase "Upload Routine CSV" as UC_UploadRoutine
+  usecase "Upload Bus Schedule" as UC_UploadBus
+  usecase "Oversee Operations" as UC_Operations
+
+  usecase "Create Smart Classroom" as UC_CreateClassroom
+  usecase "Upload Students to Classroom" as UC_UploadStudents
+  usecase "Mark Attendance" as UC_Attendance
+  usecase "Add Marks" as UC_AddMarks
+  usecase "Post Classroom Announcements/Resources" as UC_ClassroomPosts
+}
+
+Guest --> UC_Landing
+Guest --> UC_Register
+Guest --> UC_Login
+
+Student --> UC_Login
+Student --> UC_Dashboard
+Student --> UC_Profile
+Student --> UC_Notifications
+Student --> UC_ViewAnnouncements
+Student --> UC_Routine
+Student --> UC_Results
+Student --> UC_FreeRooms
+Student --> UC_AccessSmartClass
+Student --> UC_Resources
+Student --> UC_DownloadResources
+Student --> UC_RateResources
+Student --> UC_JoinGroups
+Student --> UC_StudyGroups
+Student --> UC_GroupMessages
+Student --> UC_GroupReact
+Student --> UC_Deadlines
+Student --> UC_BookConsult
+Student --> UC_Bus
+Student --> UC_SubmitAssignment
+
+Teacher --> UC_Login
+Teacher --> UC_Dashboard
+Teacher --> UC_Profile
+Teacher --> UC_Notifications
+Teacher --> UC_ViewAnnouncements
+Teacher --> UC_ManageAnnouncements
+Teacher --> UC_ManageSmartClass
+Teacher --> UC_UploadResources
+Teacher --> UC_StudyGroups
+Teacher --> UC_GroupMessages
+Teacher --> UC_GroupReact
+Teacher --> UC_ManageAssignments
+Teacher --> UC_GradeSubmissions
+Teacher --> UC_CreateConsult
+Teacher --> UC_ManageResults
+
+Admin --> UC_Login
+Admin --> UC_Dashboard
+Admin --> UC_Profile
+Admin --> UC_Notifications
+Admin --> UC_ManageAnnouncements
+Admin --> UC_ManageSmartClass
+Admin --> UC_ManageUsers
+Admin --> UC_ToggleUsers
+Admin --> UC_UploadRoutine
+Admin --> UC_UploadBus
+Admin --> UC_PublishResults
+Admin --> UC_Operations
+
+UC_Dashboard ..> UC_Auth : <<include>>
+UC_Profile ..> UC_Auth : <<include>>
+UC_Notifications ..> UC_Auth : <<include>>
+UC_ViewAnnouncements ..> UC_Auth : <<include>>
+UC_ManageAnnouncements ..> UC_Auth : <<include>>
+UC_Routine ..> UC_Auth : <<include>>
+UC_Results ..> UC_Auth : <<include>>
+UC_FreeRooms ..> UC_Auth : <<include>>
+UC_AccessSmartClass ..> UC_Auth : <<include>>
+UC_ManageSmartClass ..> UC_Auth : <<include>>
+UC_Resources ..> UC_Auth : <<include>>
+UC_UploadResources ..> UC_Auth : <<include>>
+UC_DownloadResources ..> UC_Auth : <<include>>
+UC_RateResources ..> UC_Auth : <<include>>
+UC_JoinGroups ..> UC_Auth : <<include>>
+UC_StudyGroups ..> UC_Auth : <<include>>
+UC_GroupMessages ..> UC_Auth : <<include>>
+UC_GroupReact ..> UC_Auth : <<include>>
+UC_Deadlines ..> UC_Auth : <<include>>
+UC_BookConsult ..> UC_Auth : <<include>>
+UC_CreateConsult ..> UC_Auth : <<include>>
+UC_Bus ..> UC_Auth : <<include>>
+UC_SubmitAssignment ..> UC_Auth : <<include>>
+UC_ManageAssignments ..> UC_Auth : <<include>>
+UC_GradeSubmissions ..> UC_Auth : <<include>>
+UC_ManageResults ..> UC_Auth : <<include>>
+UC_PublishResults ..> UC_Auth : <<include>>
+UC_ManageUsers ..> UC_Auth : <<include>>
+UC_ToggleUsers ..> UC_Auth : <<include>>
+UC_UploadRoutine ..> UC_Auth : <<include>>
+UC_UploadBus ..> UC_Auth : <<include>>
+UC_Operations ..> UC_Auth : <<include>>
+
+UC_ManageSmartClass ..> UC_CreateClassroom : <<include>>
+UC_ManageSmartClass ..> UC_UploadStudents : <<include>>
+UC_ManageSmartClass ..> UC_Attendance : <<include>>
+UC_ManageSmartClass ..> UC_AddMarks : <<include>>
+UC_ManageSmartClass ..> UC_ClassroomPosts : <<include>>
+
+UC_Resources ..> UC_DownloadResources : <<extend>>
+UC_Resources ..> UC_RateResources : <<extend>>
+
+UC_StudyGroups ..> UC_GroupMessages : <<include>>
+UC_StudyGroups ..> UC_GroupReact : <<include>>
+
+UC_ManageAssignments ..> UC_GradeSubmissions : <<include>>
+UC_ManageResults ..> UC_PublishResults : <<include>>
+UC_ManageUsers ..> UC_ToggleUsers : <<include>>
+
+@enduml

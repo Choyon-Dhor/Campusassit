@@ -1,0 +1,169 @@
+@startuml
+' CampusAssist one-page printable use case diagram.
+' Designed for academic printing: clean UML styling, fewer repeated lines,
+' and actor generalization for Student, Teacher, and Admin.
+'
+' Export note:
+' If the VS Code PlantUML extension shows:
+' ClassNotFoundException: org.apache.batik.apps.rasterizer.SVGConverter
+' then it is trying to export PDF without Batik installed.
+' Export this diagram as SVG or PNG, then print/save that file as PDF.
+
+left to right direction
+scale 0.9
+
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+skinparam packageStyle rectangle
+skinparam actorStyle stick
+skinparam defaultFontName Arial
+skinparam defaultFontSize 12
+skinparam ArrowColor #263238
+skinparam ArrowThickness 1
+skinparam RectangleBorderColor #263238
+skinparam RectangleBackgroundColor #FFFFFF
+skinparam PackageBorderColor #263238
+skinparam PackageBackgroundColor #FFFFFF
+skinparam UsecaseBorderColor #263238
+skinparam UsecaseBackgroundColor #FFFFFF
+skinparam UsecaseFontSize 11
+skinparam TitleFontSize 22
+skinparam roundcorner 0
+skinparam linetype ortho
+
+title CampusAssist Use Case Diagram
+
+actor Guest
+actor "Authenticated\nUser" as User
+actor Student
+actor Teacher
+actor Admin
+
+Student --|> User
+Teacher --|> User
+Admin --|> User
+
+rectangle "CampusAssist System" {
+  package "Access" {
+    usecase "View Landing\nPage" as UC_Landing
+    usecase "Register" as UC_Register
+    usecase "Login" as UC_Login
+    usecase "Authenticate\nUser" as UC_Auth
+    usecase "View Dashboard" as UC_Dashboard
+    usecase "Manage Profile" as UC_Profile
+    usecase "View\nNotifications" as UC_Notifications
+  }
+
+  package "Student Services" {
+    usecase "View Academic\nInformation" as UC_AcademicInfo
+    usecase "View Routine" as UC_Routine
+    usecase "View Results" as UC_Results
+    usecase "View Free\nClassrooms" as UC_FreeRooms
+    usecase "View Bus\nSchedule" as UC_Bus
+    usecase "Access Smart\nClassrooms" as UC_AccessSmartClass
+    usecase "Book\nConsultations" as UC_BookConsult
+    usecase "Manage Personal\nDeadlines" as UC_Deadlines
+    usecase "Submit\nAssignments" as UC_SubmitAssignment
+  }
+
+  package "Resources and Groups" {
+    usecase "View\nAnnouncements" as UC_ViewAnnouncements
+    usecase "Access\nResources" as UC_Resources
+    usecase "Upload\nResources" as UC_UploadResources
+    usecase "Download\nResources" as UC_DownloadResources
+    usecase "Rate\nResources" as UC_RateResources
+    usecase "Participate in\nStudy Groups" as UC_StudyGroups
+    usecase "Send Group\nMessages" as UC_GroupMessages
+    usecase "React/Comment\nin Groups" as UC_GroupReact
+  }
+
+  package "Teaching and Classroom" {
+    usecase "Manage\nAnnouncements" as UC_ManageAnnouncements
+    usecase "Create Consultation\nHours" as UC_CreateConsult
+    usecase "Manage\nAssignments" as UC_ManageAssignments
+    usecase "Review/Grade\nSubmissions" as UC_GradeSubmissions
+    usecase "Manage Smart\nClassroom" as UC_ManageSmartClass
+    usecase "Create Smart\nClassroom" as UC_CreateClassroom
+    usecase "Upload Students\nto Classroom" as UC_UploadStudents
+    usecase "Mark\nAttendance" as UC_Attendance
+    usecase "Add Marks" as UC_AddMarks
+    usecase "Post Classroom\nAnnouncements/Resources" as UC_ClassroomPosts
+  }
+
+  package "Administration" {
+    usecase "Manage Results" as UC_ManageResults
+    usecase "Upload / Import /\nPublish Results" as UC_PublishResults
+    usecase "Manage Users" as UC_ManageUsers
+    usecase "Activate/Deactivate\nUsers" as UC_ToggleUsers
+    usecase "Manage Routine\nand Bus Schedule" as UC_ManageSchedules
+    usecase "Upload Routine\nCSV" as UC_UploadRoutine
+    usecase "Upload Bus\nSchedule" as UC_UploadBus
+    usecase "Oversee\nOperations" as UC_Operations
+  }
+}
+
+Guest --> UC_Landing
+Guest --> UC_Register
+Guest --> UC_Login
+
+User --> UC_Login
+User --> UC_Dashboard
+User --> UC_Profile
+User --> UC_Notifications
+User --> UC_ViewAnnouncements
+
+Student --> UC_AcademicInfo
+Student --> UC_AccessSmartClass
+Student --> UC_Resources
+Student --> UC_StudyGroups
+Student --> UC_BookConsult
+Student --> UC_Deadlines
+Student --> UC_SubmitAssignment
+
+Teacher --> UC_ManageAnnouncements
+Teacher --> UC_UploadResources
+Teacher --> UC_StudyGroups
+Teacher --> UC_CreateConsult
+Teacher --> UC_ManageAssignments
+Teacher --> UC_ManageSmartClass
+Teacher --> UC_ManageResults
+
+Admin --> UC_ManageAnnouncements
+Admin --> UC_ManageSmartClass
+Admin --> UC_ManageUsers
+Admin --> UC_ManageSchedules
+Admin --> UC_PublishResults
+Admin --> UC_Operations
+
+UC_Login ..> UC_Auth : <<include>>
+
+UC_AcademicInfo ..> UC_Routine : <<include>>
+UC_AcademicInfo ..> UC_Results : <<include>>
+UC_AcademicInfo ..> UC_FreeRooms : <<include>>
+UC_AcademicInfo ..> UC_Bus : <<include>>
+
+UC_DownloadResources ..> UC_Resources : <<extend>>
+UC_RateResources ..> UC_Resources : <<extend>>
+
+UC_StudyGroups ..> UC_GroupMessages : <<include>>
+UC_StudyGroups ..> UC_GroupReact : <<include>>
+
+UC_ManageAssignments ..> UC_GradeSubmissions : <<include>>
+
+UC_ManageSmartClass ..> UC_CreateClassroom : <<include>>
+UC_ManageSmartClass ..> UC_UploadStudents : <<include>>
+UC_ManageSmartClass ..> UC_Attendance : <<include>>
+UC_ManageSmartClass ..> UC_AddMarks : <<include>>
+UC_ManageSmartClass ..> UC_ClassroomPosts : <<include>>
+
+UC_ManageResults ..> UC_PublishResults : <<include>>
+UC_ManageUsers ..> UC_ToggleUsers : <<include>>
+UC_ManageSchedules ..> UC_UploadRoutine : <<include>>
+UC_ManageSchedules ..> UC_UploadBus : <<include>>
+
+legend bottom
+  Print as SVG/PNG with Fit to page, A4 landscape.
+  Student, Teacher, and Admin inherit common authenticated-user use cases.
+endlegend
+
+@enduml
