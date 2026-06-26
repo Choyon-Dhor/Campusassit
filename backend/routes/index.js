@@ -27,11 +27,14 @@ const db = require('../config/database');
 const authRouter = express.Router();
 authRouter.post('/register',              authCtrl.register);
 authRouter.post('/login',                 authCtrl.login);
+authRouter.post('/forgot-password',       authCtrl.forgotPassword);
+authRouter.post('/reset-password',        authCtrl.resetPassword);
 authRouter.get('/me',              auth,           authCtrl.getMe);
 authRouter.put('/profile',         auth,           authCtrl.updateProfile);
 authRouter.put('/change-password', auth,           authCtrl.changePassword);
 authRouter.get('/users',           auth, isAdmin,  authCtrl.getAllUsers);
 authRouter.put('/admin/users/:id', auth, isAdmin,  authCtrl.adminUpdateUser);
+authRouter.put('/admin/users/:id/password', auth, isAdmin, authCtrl.adminResetUserPassword);
 authRouter.patch('/admin/users/:id/toggle', auth, isAdmin, authCtrl.adminToggleUser);
 
 // ── Announcements ─────────────────────────────────────────────
@@ -266,3 +269,4 @@ router.use('/bus',           busRouter);
 router.use('/batch-routine', routineRouter);
 
 module.exports = router;
+

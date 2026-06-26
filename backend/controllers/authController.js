@@ -2,8 +2,9 @@
 // controllers/authController.js
 // ============================================================
 const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
 const jwt    = require('jsonwebtoken');
-const { userRepo }    = require('../repositories');
+const { userRepo, passwordResetTokenRepo } = require('../repositories');
 const { UserFactory } = require('../services/UserFactory');
 
 const generateToken = (userId) =>
@@ -11,6 +12,31 @@ const generateToken = (userId) =>
     expiresIn: process.env.JWT_EXPIRES_IN || '7d',
   });
 
+const PASSWORD_MIN_LENGTH = 6;
+const PASSWORD_RESET_MESSAGE = 'If an account exists for that email, password reset instructions have been sent.';
+
+const getPasswordResetTtlMinutes = () => {
+  const parsed = parseInt(process.env.PASSWORD_RESET_TOKEN_TTL_MINUTES, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 30;
+};
+
+const createPasswordResetToken = () => crypto.randomBytes(32).toString('hex');
+const hashPasswordResetToken = (token) => crypto.createHash('sha256').update(token).digest('hex');
+const isValidPassword = (password) => typeof password === 'string' && password.length >= PASSWORD_MIN_LENGTH;
+const shouldReturnResetToken = () =>
+  process.env.NODE_ENV !== 'production' || process.env.RETURN_PASSWORD_RESET_TOKEN === 'true';
+const getFrontendBaseUrl = () => (process.env.FRONTEND_URL || 'http://localhost:3000').replace(/\/$/, '');
+
+const buildPasswordResetResponse = (token) => {
+  const payload = { success: true, message: PASSWORD_RESET_MESSAGE };
+
+  if (token && shouldReturnResetToken()) {
+    payload.resetToken = token;
+    payload.resetUrl = `${getFrontendBaseUrl()}/reset-password/${token}`;
+  }
+
+  return payload;
+};
 // POST /api/auth/register
 exports.register = async (req, res) => {
   try {
@@ -101,6 +127,59 @@ exports.login = async (req, res) => {
   }
 };
 
+// POST /api/auth/forgot-password
+exports.forgotPassword = async (req, res) => {
+  try {
+    const email = (req.body.email || '').trim();
+    if (!email) {
+      return res.status(400).json({ success: false, message: 'Email is required.' });
+    }
+
+    const user = await userRepo.findByEmail(email);
+    let resetToken = null;
+
+    if (user && user.is_active !== false) {
+      resetToken = createPasswordResetToken();
+      const tokenHash = hashPasswordResetToken(resetToken);
+      const expiresAt = new Date(Date.now() + getPasswordResetTtlMinutes() * 60 * 1000);
+      await passwordResetTokenRepo.createForUser(user.id, tokenHash, expiresAt);
+    }
+
+    res.json(buildPasswordResetResponse(resetToken));
+  } catch (err) {
+    console.error('Forgot password error:', err);
+    res.status(500).json({ success: false, message: 'Server error while creating password reset request.' });
+  }
+};
+
+// POST /api/auth/reset-password
+exports.resetPassword = async (req, res) => {
+  try {
+    const { token, newPassword } = req.body;
+
+    if (!token || !isValidPassword(newPassword)) {
+      return res.status(400).json({
+        success: false,
+        message: `Token and a password with at least ${PASSWORD_MIN_LENGTH} characters are required.`,
+      });
+    }
+
+    const tokenHash = hashPasswordResetToken(token);
+    const resetRecord = await passwordResetTokenRepo.findValidByHash(tokenHash);
+    if (!resetRecord || resetRecord.is_active === false) {
+      return res.status(400).json({ success: false, message: 'Password reset link is invalid or expired.' });
+    }
+
+    const hashed = await bcrypt.hash(newPassword, 10);
+    await userRepo.update(resetRecord.user_id, { password: hashed });
+    await passwordResetTokenRepo.markUserTokensUsed(resetRecord.user_id);
+
+    res.json({ success: true, message: 'Password has been reset. You can now sign in.' });
+  } catch (err) {
+    console.error('Reset password error:', err);
+    res.status(500).json({ success: false, message: 'Server error while resetting password.' });
+  }
+};
 // GET /api/auth/me
 exports.getMe = async (req, res) => {
   try {
@@ -135,11 +214,21 @@ exports.updateProfile = async (req, res) => {
 exports.changePassword = async (req, res) => {
   try {
     const { currentPassword, newPassword } = req.body;
+    if (!currentPassword || !isValidPassword(newPassword)) {
+      return res.status(400).json({
+        success: false,
+        message: `Current password and a new password with at least ${PASSWORD_MIN_LENGTH} characters are required.`,
+      });
+    }
+
     const user = await userRepo.findById(req.user.id);
+    if (!user) return res.status(404).json({ success: false, message: 'User not found.' });
+
     const isMatch = await bcrypt.compare(currentPassword, user.password);
     if (!isMatch) return res.status(400).json({ success: false, message: 'Current password is incorrect.' });
     const hashed = await bcrypt.hash(newPassword, 10);
     await userRepo.update(req.user.id, { password: hashed });
+    await passwordResetTokenRepo.markUserTokensUsed(req.user.id);
     res.json({ success: true, message: 'Password changed successfully.' });
   } catch (err) {
     res.status(500).json({ success: false, message: 'Server error.' });
@@ -198,6 +287,32 @@ exports.adminUpdateUser = async (req, res) => {
   }
 };
 
+// PUT /api/auth/admin/users/:id/password  - admin resets any user's password
+exports.adminResetUserPassword = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { newPassword } = req.body;
+
+    if (!isValidPassword(newPassword)) {
+      return res.status(400).json({
+        success: false,
+        message: `New password must be at least ${PASSWORD_MIN_LENGTH} characters.`,
+      });
+    }
+
+    const user = await userRepo.findById(id);
+    if (!user) return res.status(404).json({ success: false, message: 'User not found.' });
+
+    const hashed = await bcrypt.hash(newPassword, 10);
+    await userRepo.update(id, { password: hashed });
+    await passwordResetTokenRepo.markUserTokensUsed(id);
+
+    res.json({ success: true, message: `Password reset for ${user.email}.` });
+  } catch (err) {
+    console.error('Admin reset password error:', err);
+    res.status(500).json({ success: false, message: 'Server error while resetting user password.' });
+  }
+};
 // PATCH /api/auth/admin/users/:id/toggle  — activate / deactivate
 exports.adminToggleUser = async (req, res) => {
   try {
@@ -212,5 +327,7 @@ exports.adminToggleUser = async (req, res) => {
     res.status(500).json({ success: false, message: err.message });
   }
 };
+
+
 
 

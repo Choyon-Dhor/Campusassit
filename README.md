@@ -250,6 +250,7 @@ GET    /api/auth/me               [JWT]
 PUT    /api/auth/profile          [JWT]
 PUT    /api/auth/change-password  [JWT]
 GET    /api/auth/users            [admin]
+PUT    /api/auth/admin/users/:id/password [admin]
 ```
 
 ### Announcements
@@ -432,3 +433,4 @@ Run them with:
 cd backend
 npm test
 ```
+

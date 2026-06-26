@@ -45,6 +45,42 @@ class UserRepository extends BaseRepository {
   }
 }
 
+class PasswordResetTokenRepository extends BaseRepository {
+  constructor() { super('password_reset_tokens'); }
+
+  async createForUser(userId, tokenHash, expiresAt) {
+    await this.markUserTokensUsed(userId);
+    const rows = await this.db.query(
+      `INSERT INTO password_reset_tokens (user_id, token_hash, expires_at)
+       VALUES ($1, $2, $3)
+       RETURNING *`,
+      [userId, tokenHash, expiresAt]
+    );
+    return rows[0];
+  }
+
+  async findValidByHash(tokenHash) {
+    return await this.db.queryOne(
+      `SELECT prt.*, u.email, u.role, u.is_active
+       FROM password_reset_tokens prt
+       JOIN users u ON u.id = prt.user_id
+       WHERE prt.token_hash = $1
+         AND prt.used_at IS NULL
+         AND prt.expires_at > NOW()
+       LIMIT 1`,
+      [tokenHash]
+    );
+  }
+
+  async markUserTokensUsed(userId) {
+    return await this.db.query(
+      `UPDATE password_reset_tokens
+       SET used_at = NOW()
+       WHERE user_id = $1 AND used_at IS NULL`,
+      [userId]
+    );
+  }
+}
 // ── Announcement Repository ──────────────────────────────────
 class AnnouncementRepository extends BaseRepository {
   constructor() { super('announcements'); }
@@ -618,9 +654,11 @@ class ConsultationRepository extends BaseRepository {
 
 module.exports = {
   userRepo:         new UserRepository(),
+  passwordResetTokenRepo: new PasswordResetTokenRepository(),
   announcementRepo: new AnnouncementRepository(),
   resourceRepo:     new ResourceRepository(),
   studyGroupRepo:   new StudyGroupRepository(),
   deadlineRepo:     new DeadlineRepository(),
   consultationRepo: new ConsultationRepository(),
 };
+

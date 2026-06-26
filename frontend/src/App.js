@@ -18,6 +18,7 @@ import LandingAuthPage from './components/auth/LandingAuthPage';
 import Login from './components/auth/Login';
 import Register from './components/auth/Register';
 import Profile from './components/auth/Profile';
+import PasswordRecoveryPage from './components/auth/PasswordRecoveryPage';
 
 // Pages
 import Dashboard from './components/dashboard/Dashboard';
@@ -96,6 +97,8 @@ function AppRoutes() {
       <Route path="/" element={<PublicRoute><LandingAuthPage initialTab="sign-in" /></PublicRoute>} />
       <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
       <Route path="/register" element={<PublicRoute><Register /></PublicRoute>} />
+      <Route path="/forgot-password" element={<PublicRoute><PasswordRecoveryPage /></PublicRoute>} />
+      <Route path="/reset-password/:token" element={<PublicRoute><PasswordRecoveryPage /></PublicRoute>} />
 
       <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
         <Route path="dashboard" element={<Dashboard />} />
@@ -143,3 +146,4 @@ function App() {
 }
 
 export default App;
+

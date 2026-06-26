@@ -278,9 +278,7 @@ export default function AuthPanel({ initialTab = 'sign-in' }) {
             passwordVisible={showPassword.signIn}
             onFieldChange={setSignInField}
             onTogglePassword={() => setShowPassword((prev) => ({ ...prev, signIn: !prev.signIn }))}
-            onForgotPassword={() =>
-              toast.info('Password recovery is currently handled by your university administrator.')
-            }
+            onForgotPassword={() => navigate('/forgot-password')}
             onSubmit={handleSignIn}
           />
         ) : (
@@ -324,3 +322,4 @@ export default function AuthPanel({ initialTab = 'sign-in' }) {
     </motion.aside>
   );
 }
+

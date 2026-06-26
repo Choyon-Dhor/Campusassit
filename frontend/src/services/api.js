@@ -47,9 +47,12 @@ export const authService = {
   getMe: () => api.get('/auth/me'),
   updateProfile: (data) => api.put('/auth/profile', data),
   changePassword: (data) => api.put('/auth/change-password', data),
+  requestPasswordReset: (data) => api.post('/auth/forgot-password', data),
+  resetPassword: (data) => api.post('/auth/reset-password', data),
   getAllUsers: () => api.get('/auth/users'),
   updateUser: (id, data) => api.put(`/auth/admin/users/${id}`, data),
   toggleUserActive: (id) => api.patch(`/auth/admin/users/${id}/toggle`),
+  adminResetUserPassword: (id, data) => api.put(`/auth/admin/users/${id}/password`, data),
 };
 
 // Announcements
@@ -227,3 +230,5 @@ export const batchRoutineService = {
   getTodayClasses: (batch, section) => api.get(`/batch-routine/today/${batch}/${section}`),
   getFreeRooms: (params) => api.get('/batch-routine/free-rooms', { params }),
 };
+
+

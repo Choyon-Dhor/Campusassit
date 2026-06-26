@@ -9,7 +9,7 @@ import {
 } from '@mui/material';
 import {
   Search, Edit, Block, CheckCircle, ManageAccounts,
-  People, School, Person, AdminPanelSettings, Refresh
+  People, School, Person, AdminPanelSettings, Refresh, VpnKey
 } from '@mui/icons-material';
 import { authService } from '../../services/api';
 import { toast } from 'react-toastify';
@@ -26,6 +26,9 @@ export default function UserManagement() {
   const [editUser,  setEditUser]  = useState(null);
   const [editForm,  setEditForm]  = useState({});
   const [saving,    setSaving]    = useState(false);
+  const [resetUser, setResetUser] = useState(null);
+  const [resetForm, setResetForm] = useState({ newPassword: '', confirmPassword: '' });
+  const [resetting, setResetting] = useState(false);
 
   useEffect(() => { loadUsers(); }, []);
 
@@ -70,6 +73,30 @@ export default function UserManagement() {
       loadUsers();
     } catch (err) { toast.error(err.message || 'Update failed'); }
     finally { setSaving(false); }
+  };
+
+  const openPasswordReset = (u) => {
+    setResetUser(u);
+    setResetForm({ newPassword: '', confirmPassword: '' });
+  };
+
+  const handlePasswordReset = async () => {
+    if (!resetForm.newPassword || resetForm.newPassword.length < 6) {
+      toast.error('Password must be at least 6 characters.');
+      return;
+    }
+    if (resetForm.newPassword !== resetForm.confirmPassword) {
+      toast.error('Passwords do not match.');
+      return;
+    }
+
+    setResetting(true);
+    try {
+      await authService.adminResetUserPassword(resetUser.id, { newPassword: resetForm.newPassword });
+      toast.success(`Password reset for ${resetUser.email}.`);
+      setResetUser(null);
+    } catch (err) { toast.error(err.message || 'Password reset failed'); }
+    finally { setResetting(false); }
   };
 
   const handleToggleActive = async (u) => {
@@ -222,6 +249,11 @@ export default function UserManagement() {
                           <Edit sx={{ fontSize:16 }} />
                         </IconButton>
                       </Tooltip>
+                      <Tooltip title="Reset password">
+                        <IconButton size="small" color="primary" onClick={()=>openPasswordReset(u)}>
+                          <VpnKey sx={{ fontSize:16 }} />
+                        </IconButton>
+                      </Tooltip>
                       <Tooltip title={u.is_active===false ? 'Activate' : 'Deactivate'}>
                         <IconButton size="small"
                           color={u.is_active===false ? 'success' : 'error'}
@@ -302,6 +334,40 @@ export default function UserManagement() {
           </Button>
         </DialogActions>
       </Dialog>
+      {/* Password Reset Dialog */}
+      <Dialog open={!!resetUser} onClose={()=>setResetUser(null)} maxWidth="xs" fullWidth
+        PaperProps={{ sx:{ borderRadius:3 } }}>
+        <DialogTitle sx={{ fontWeight:700 }}>
+          <VpnKey sx={{ mr:1, verticalAlign:'middle', color:'#1a73e8', fontSize:20 }} />
+          Reset Password
+        </DialogTitle>
+        <DialogContent dividers>
+          <Alert severity="warning" sx={{ mb:2, borderRadius:2 }}>
+            This will immediately replace the password for {resetUser?.email}.
+          </Alert>
+          <TextField
+            label="New Password" fullWidth type="password" value={resetForm.newPassword}
+            onChange={e=>setResetForm(f=>({...f,newPassword:e.target.value}))} sx={{ mb:2 }}
+            autoComplete="new-password"
+          />
+          <TextField
+            label="Confirm Password" fullWidth type="password" value={resetForm.confirmPassword}
+            onChange={e=>setResetForm(f=>({...f,confirmPassword:e.target.value}))}
+            autoComplete="new-password"
+          />
+        </DialogContent>
+        <DialogActions sx={{ p:2 }}>
+          <Button onClick={()=>setResetUser(null)}>Cancel</Button>
+          <Button variant="contained" color="warning" onClick={handlePasswordReset} disabled={resetting}>
+            {resetting ? <CircularProgress size={18}/> : 'Reset Password'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </div>
   );
 }
+
+
+
+
+

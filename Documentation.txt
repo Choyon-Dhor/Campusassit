@@ -1,0 +1,302 @@
+CampusAssist Documentation
+CampusAssist is a full-stack university management and collaboration platform for Students, Teachers, and Admins. It centralizes announcements, class routine, results, free classrooms, smart classrooms, resources, study groups, deadlines, consultations, bus schedules, notifications, profile management, assignments, and admin user management. The current implementation follows a 3-tier architecture shown across README.md, frontend/src/App.js, backend/server.js, and backend/routes/index.js.
+
+Architecture
+
+Presentation layer: React frontend in frontend/src
+Application layer: Node.js + Express REST API in backend
+Data layer: PostgreSQL schema and seed data in schema.sql and schema_additions.sql
+Design patterns used:
+MVC: components + controllers + repositories
+Singleton: PostgreSQL pool in database.js
+Repository Pattern: backend/repositories/index.js
+Factory Pattern: backend/services/UserFactory.js
+Observer-style notification handling: backend/services/NotificationService.js
+Main Functional Modules
+
+Authentication and profile
+Announcements
+Free classrooms
+Smart classrooms
+Resources and recommendation engine
+Study groups with messages, reactions, announcements, resources, typing status
+Deadlines
+Consultations
+Results management
+Batch routine
+Bus schedule
+Notifications
+Assignment management
+Admin user management
+Technologies Used
+
+React 18: component-based frontend UI
+React DOM: renders React into the browser
+React Router DOM: client-side routing for /, /login, /dashboard, etc.
+Axios: API communication between frontend and backend
+Material UI (MUI): component styling system and theme support
+@mui/icons-material: icon library
+Bootstrap 5: legacy/shared utility styling already present in app
+Tailwind CSS: modern utility-first styling, especially used in the new landing/auth UI
+PostCSS and Autoprefixer: CSS processing for Tailwind
+React Toastify: toast notifications for success/error feedback
+Recharts: charts on analytics/dashboard-related screens
+date-fns: date formatting and manipulation
+Framer Motion: animation support
+Node.js: backend runtime
+Express.js: REST API server
+pg: PostgreSQL driver
+dotenv: environment variable loading
+bcryptjs: password hashing
+jsonwebtoken: JWT-based authentication
+cors: controlled cross-origin access
+helmet: security headers
+morgan: request logging in development
+express-rate-limit: API abuse protection
+express-validator: request validation support
+multer: file upload handling
+csv-parser: CSV import parsing
+pdf-parse: PDF parsing support
+moment: date/time utilities in backend
+pg-format: SQL formatting helper
+serverless-http: serverless compatibility
+nodemon: development auto-reload
+Netlify: frontend deployment config exists in netlify.toml
+Vercel: backend deployment config exists in backend/vercel.json
+Frontend Structure
+
+Root routing and auth guards: App.js
+Global auth state: AuthContext.js
+API service layer: api.js
+Response helpers: contracts.js
+Main UI areas:
+Public landing/auth page
+Protected dashboard layout
+Feature components for announcements, classrooms, results, resources, study groups, deadlines, consultations, bus, notifications, admin users
+Backend Structure
+
+Server bootstrap and middleware: server.js
+Route definitions: routes/index.js
+JWT and role middleware: auth.js
+Database pool: database.js
+Controllers: auth, announcements, classrooms, smart classrooms, assignments, results, bus, feature controllers
+Repositories: encapsulate PostgreSQL queries and entity operations
+Utilities: classroom finder and routine parser
+Tests: auth, announcements, assignments, smart classroom
+Database Design
+Main tables visible in the schema:
+
+users
+announcements
+notifications
+classrooms
+classroom_students
+classroom_attendance
+classroom_marks
+classroom_announcements
+classroom_resources
+rooms
+routine
+resources
+resource_ratings
+study_groups
+study_group_members
+study_group_messages
+study_group_announcements
+study_group_announcement_comments
+study_group_activities
+study_group_resources
+study_group_message_reactions
+study_group_message_reads
+study_group_typing_status
+consultation_hours
+consultation_appointments
+deadlines
+assignments
+assignment_submissions
+batches
+results
+bus_routes
+bus_stops
+reschedule_requests
+Security Features
+
+JWT bearer authentication
+bcrypt password hashing
+role-based access control for student, teacher, admin
+deactivated-user blocking
+Helmet security headers
+CORS restriction to allowed frontend URL
+rate limiting on /api
+file upload validation through Multer
+centralized 401/403/500 handling on frontend and backend
+Important Algorithms
+
+Free classroom detection:
+compares all rooms with occupied rooms for a given day/time
+Recommendation engine:
+score = downloads 0.5 + rating 0.3 + recency 0.2
+Routine parsing:
+imports CSV routines and converts them into structured timetable data
+Attendance and marks aggregation:
+smart classroom endpoints summarize per-student records
+Use Case Diagram Guidance
+Main actors:
+
+Guest
+Student
+Teacher
+Admin
+Core Guest use cases:
+
+View landing page
+Register
+Login
+Core Student use cases:
+
+View dashboard
+View announcements
+View routine
+View results
+View free classrooms
+View smart classrooms assigned to them
+Access resources
+Rate/download resources
+Join/leave study groups
+Send study group messages
+React/comment in study groups
+Manage personal deadlines
+Book consultations
+View bus schedule
+View notifications
+Update profile
+Submit assignments
+Core Teacher use cases:
+
+Login
+View dashboard
+Create/update/delete announcements
+Create smart classroom
+Upload students to classroom
+Mark attendance
+Add marks
+Post classroom announcements/resources
+Create/update/delete assignments
+Review and grade submissions
+Create consultation hours
+Upload results / import CSV / bulk save results
+Upload resources
+Participate in study groups
+Update profile
+Core Admin use cases:
+
+All general authenticated features
+View all users
+update user info
+activate/deactivate users
+upload routine CSV
+upload bus schedule
+manage announcements
+manage smart classrooms
+publish results/semester results
+oversee operations
+Use-case relationships you can mention in viva:
+
+Authenticate User is included before every protected feature
+Manage Smart Classroom includes create classroom, upload students, mark attendance, add marks, add resources, add announcements
+Manage Study Group includes join group, post messages, reactions, announcements, comments, resources, activity
+Manage Results includes upload result, bulk save, import CSV, publish result
+Manage Resources includes upload, download, rate, recommendation
+Manage Profile is common to all authenticated actors
+How to Find the Use Case Diagram from Code
+
+Read actors from role middleware in auth.js
+Read system functions from routes/index.js
+Read UI modules from frontend/src/App.js
+Read entities from the schema files
+Convert route verbs into use cases:
+GET usually means view/search/list
+POST usually means create/book/join/upload/submit
+PUT/PATCH usually means update/publish/toggle/status change
+DELETE usually means remove/delete
+Group related operations under one oval in the diagram
+Software Requirements
+
+OS: Windows 10/11, Linux, or macOS
+Node.js: 18+
+npm: 9+
+PostgreSQL: 14+
+Modern browser: Chrome, Edge, Firefox
+Internet connection for package install and deployment
+Hardware Requirements
+Estimated from the current stack:
+
+Minimum for development:
+Dual-core CPU
+8 GB RAM
+10–20 GB free storage
+Recommended for smooth development:
+Intel i5 / Ryzen 5 or better
+16 GB RAM
+SSD storage
+For demo/server hosting:
+2 vCPU, 4 GB RAM, 20 GB storage minimum
+Recommended for multi-user campus demo:
+4 vCPU, 8 GB RAM, SSD-backed database
+No dedicated GPU is required
+Time Constraints
+Estimated academic project timeline:
+
+Week 1: requirement gathering and scope definition
+Week 2: database design and ERD
+Week 3: backend auth and user roles
+Week 4: announcements, resources, deadlines
+Week 5: classrooms and routine
+Week 6: smart classroom attendance and marks
+Week 7: study groups and notifications
+Week 8: consultations, bus schedule, results
+Week 9: frontend integration and dashboard polish
+Week 10: testing, bug fixing, deployment
+Week 11: documentation, diagrams, viva prep
+Week 12: final review and presentation
+If done by one developer, realistic compressed time is about 8–12 weeks. With a small team, 4–6 weeks is possible.
+Team Management
+Suggested team roles:
+
+Project Manager / Team Lead
+Frontend Developer
+Backend Developer
+Database Engineer
+QA / Testing / Documentation Lead
+If only 3 people are available:
+
+Member 1: frontend, UI, routing, integration
+Member 2: backend APIs, auth, controllers
+Member 3: database, testing, documentation, deployment
+Recommended management process:
+
+use Git with feature branches
+weekly sprint planning
+task board with module-wise progress
+short daily sync
+API contract agreement before integration
+weekly integration testing
+final regression testing before demo
+Viva-Ready Explanation
+If asked “What is CampusAssist?”:
+
+CampusAssist is a full-stack university management and collaboration platform that unifies academic communication, classroom coordination, resources, results, deadlines, study groups, consultations, and administration into one role-based system.
+If asked “Why these technologies?”:
+
+React gives reusable UI and fast client-side interaction.
+Express gives a simple REST API structure.
+PostgreSQL is strong for relational academic data and complex queries.
+JWT supports stateless authentication.
+Tailwind and MUI together help build responsive and polished interfaces.
+Repository and Singleton patterns improve maintainability and database control.
+If asked “What makes it smart?”:
+
+free classroom detection
+recommendation scoring for resources
+smart classroom attendance and marks tracking
+role-based workflows for students, teachers, and admins
