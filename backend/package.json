@@ -15,6 +15,7 @@
     "db:add": "psql -U postgres -d campusassist -f database/schema_additions.sql"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.108.2",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
     "csv-parser": "^3.0.0",
