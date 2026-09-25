@@ -1,13 +1,13 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 
-export default function FloatingPreviewCard({ className = '', icon, eyebrow, title, tone = 'blue' }) {
-  const toneClasses = {
-    blue: 'from-blue-100 to-sky-50',
-    emerald: 'from-emerald-100 to-teal-50',
-    amber: 'from-amber-100 to-orange-50',
-  };
+const TONE_CLASSES = {
+  blue: 'from-blue-100 to-sky-50',
+  emerald: 'from-emerald-100 to-teal-50',
+  amber: 'from-amber-100 to-orange-50',
+};
 
+export default function FloatingPreviewCard({ className = '', icon, eyebrow, title, tone = 'blue' }) {
   return (
     <motion.article
       initial={{ opacity: 0, y: 10 }}
@@ -16,7 +16,7 @@ export default function FloatingPreviewCard({ className = '', icon, eyebrow, tit
       whileHover={{ y: [0, -8, 0] }}
       className={`absolute z-10 w-[185px] rounded-2xl border border-white/70 bg-white/85 p-3.5 shadow-[0_16px_36px_rgba(15,23,42,0.18)] backdrop-blur-xl ${className}`}
     >
-      <div className={`absolute inset-0 rounded-2xl bg-gradient-to-br ${toneClasses[tone] || toneClasses.blue} opacity-65`} />
+      <div className={`absolute inset-0 rounded-2xl bg-gradient-to-br ${TONE_CLASSES[tone] || TONE_CLASSES.blue} opacity-65`} />
       <div className="absolute inset-0 rounded-2xl bg-gradient-to-b from-white/40 via-transparent to-transparent" />
       <div className="relative flex items-start gap-2.5">
         <div className="mt-0.5 inline-flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-white/90 to-white/60 text-campus-600 shadow-sm">

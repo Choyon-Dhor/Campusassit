@@ -1,325 +1,161 @@
-// ============================================================
-// controllers/assignmentController.js
-// ============================================================
 const fs = require('fs');
 const path = require('path');
-
 const db = require('../config/database');
 const notificationService = require('../services/NotificationService');
 
-const ASSIGNMENT_UPLOAD_DIR = path.join(__dirname, '../uploads/assignments');
+const UPLOAD_DIR = path.join(__dirname, '../uploads/assignments');
 
-const normalizeAttachmentEntry = (value) => {
-  if (!value) return null;
-
-  if (typeof value === 'string') {
-    const trimmed = value.trim();
-    return trimmed || null;
+function normalizeAttachment(val) {
+  if (!val) return null;
+  if (typeof val === 'string') return val.trim() || null;
+  if (typeof val === 'object') {
+    const fp = [val.file_path, val.path, val.filename].find((e) => typeof e === 'string' && e.trim());
+    return fp ? { ...val, file_path: fp } : null;
   }
-
-  if (typeof value === 'object') {
-    const filePath = [value.file_path, value.path, value.filename]
-      .find((entry) => typeof entry === 'string' && entry.trim());
-
-    if (!filePath) return null;
-    return { ...value, file_path: filePath };
-  }
-
   return null;
-};
+}
 
-const normalizeAttachments = (value) => {
-  if (!value) return [];
-  if (Array.isArray(value)) {
-    return value
-      .map(normalizeAttachmentEntry)
-      .filter(Boolean);
-  }
-
-  if (typeof value === 'string') {
-    const trimmed = value.trim();
+function normalizeAttachments(val) {
+  if (!val) return [];
+  if (Array.isArray(val)) return val.map(normalizeAttachment).filter(Boolean);
+  if (typeof val === 'string') {
+    const trimmed = val.trim();
     if (!trimmed) return [];
-
     try {
       const parsed = JSON.parse(trimmed);
-      if (Array.isArray(parsed)) {
-        return parsed
-          .map(normalizeAttachmentEntry)
-          .filter(Boolean);
-      }
-
-      const normalizedObject = normalizeAttachmentEntry(parsed);
-      if (normalizedObject) return [normalizedObject];
-    } catch (_) {
-      // Plain string attachment path.
+      if (Array.isArray(parsed)) return parsed.map(normalizeAttachment).filter(Boolean);
+      const obj = normalizeAttachment(parsed);
+      if (obj) return [obj];
+    } catch {
+      return [trimmed];
     }
-
     return [trimmed];
   }
-
-  if (typeof value === 'object') {
-    const normalizedObject = normalizeAttachmentEntry(value);
-    return normalizedObject ? [normalizedObject] : [];
+  if (typeof val === 'object') {
+    const obj = normalizeAttachment(val);
+    return obj ? [obj] : [];
   }
   return [];
-};
+}
 
-const getPrimaryAttachmentPath = (attachments) => {
+function getPrimaryAttachmentPath(attachments) {
   const list = normalizeAttachments(attachments);
   if (!list.length) return null;
-
   const first = list[0];
-  if (typeof first === 'string') return first;
+  return typeof first === 'string' ? first : first.file_path || first.path || first.filename || null;
+}
 
-  return first.file_path || first.path || first.filename || null;
-};
-
-const withAttachmentMetadata = (record) => {
+function withAttachmentMetadata(record) {
   if (!record) return null;
-
   const attachments = normalizeAttachments(record.attachments);
-  const file_path = getPrimaryAttachmentPath(attachments);
-
   return {
     ...record,
     attachments,
-    file_path,
+    file_path: getPrimaryAttachmentPath(attachments),
   };
+}
+
+const parsePoints = (val, fallback = 100) => {
+  const num = Number(val);
+  return Number.isFinite(num) ? num : fallback;
 };
 
-const parsePoints = (value, fallback = 100) => {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : fallback;
+const serializeAttachments = (val) => JSON.stringify(normalizeAttachments(val));
+
+const formatDueDate = (val) => {
+  if (!val) return 'No due date';
+  const d = new Date(val);
+  return Number.isNaN(d.getTime()) ? 'No due date' : d.toLocaleString();
 };
 
-const serializeAttachmentsForDb = (value) => JSON.stringify(normalizeAttachments(value));
-
-const formatDueDateLabel = (value) => {
-  if (!value) return 'No due date';
-
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return 'No due date';
-
-  return parsed.toLocaleString();
-};
-
-const getDeadlinePriority = (value) => {
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return 'medium';
-
-  const diffMs = parsed.getTime() - Date.now();
-  if (diffMs <= 3 * 24 * 60 * 60 * 1000) return 'high';
-  if (diffMs <= 7 * 24 * 60 * 60 * 1000) return 'medium';
+const getPriority = (val) => {
+  const d = new Date(val);
+  if (Number.isNaN(d.getTime())) return 'medium';
+  const diff = d.getTime() - Date.now();
+  if (diff <= 3 * 86400000) return 'high';
+  if (diff <= 7 * 86400000) return 'medium';
   return 'low';
 };
 
-const buildAssignmentSummary = ({ classroom, description, dueDate, points }) => {
-  const courseLabel = classroom.course_name
-    ? `${classroom.course_code} - ${classroom.course_name}`
-    : classroom.course_code;
-
+function buildAssignmentSummary({ classroom, description, dueDate, points }) {
+  const label = classroom.course_name ? `${classroom.course_code} - ${classroom.course_name}` : classroom.course_code;
   const parts = [
-    `A new assignment has been posted for ${courseLabel}.`,
-    `Due ${formatDueDateLabel(dueDate)}.`,
+    `A new assignment has been posted for ${label}.`,
+    `Due ${formatDueDate(dueDate)}.`,
     `${points} points.`,
   ];
-
-  if (description && description.trim()) {
-    parts.push(description.trim());
-  }
-
+  if (description?.trim()) parts.push(description.trim());
   return parts.join(' ');
-};
+}
 
-const buildAssignmentAnnouncementTitle = (title, mode = 'created') => (
-  mode === 'updated' ? `Updated Assignment: ${title}` : `New Assignment: ${title}`
-);
-
-const deleteRowsByIds = async (tableName, ids) => {
+async function deleteRows(table, ids) {
   if (!ids.length) return;
+  const ph = ids.map((_, i) => `$${i + 1}`).join(', ');
+  await db.query(`DELETE FROM ${table} WHERE id IN (${ph})`, ids);
+}
 
-  const placeholders = ids.map((_, index) => `$${index + 1}`).join(', ');
-  await db.query(`DELETE FROM ${tableName} WHERE id IN (${placeholders})`, ids);
-};
-
-const getClassroomStudentIds = async (classroomId) => {
-  const students = await db.query(
+async function getClassroomStudentIds(classroomId) {
+  const rows = await db.query(
     'SELECT student_id FROM classroom_students WHERE classroom_id = $1',
     [classroomId]
   );
+  return rows.map((r) => Number(r.student_id));
+}
 
-  return students.map((student) => Number(student.student_id));
-};
+async function syncAssignmentMark({ assignmentId, classroomId, studentId, submissionId, title, grade, totalMarks, feedback, gradedAt }) {
+  const markDate = (gradedAt ? new Date(gradedAt) : new Date()).toISOString().slice(0, 10);
+  const existing =
+    (await db.queryOne('SELECT id FROM classroom_marks WHERE submission_id = $1', [submissionId])) ||
+    (await db.queryOne('SELECT id FROM classroom_marks WHERE assignment_id = $1 AND student_id = $2', [assignmentId, studentId])) ||
+    (await db.queryOne(
+      `SELECT id FROM classroom_marks
+       WHERE source = 'manual' AND classroom_id = $1 AND student_id = $2 AND title = $3 AND total_marks = $4
+       ORDER BY updated_at DESC, created_at DESC LIMIT 1`,
+      [classroomId, studentId, title, totalMarks]
+    ));
 
-const findExistingAssignmentMark = async ({
-  assignmentId,
-  classroomId,
-  studentId,
-  submissionId,
-  title,
-  totalMarks,
-}) => {
-  const bySubmission = await db.queryOne(
-    'SELECT id FROM classroom_marks WHERE submission_id = $1',
-    [submissionId]
-  );
-  if (bySubmission) return bySubmission;
-
-  const byAssignment = await db.queryOne(
-    'SELECT id FROM classroom_marks WHERE assignment_id = $1 AND student_id = $2',
-    [assignmentId, studentId]
-  );
-  if (byAssignment) return byAssignment;
-
-  return db.queryOne(
-    `SELECT id
-     FROM classroom_marks
-     WHERE source = 'manual'
-       AND classroom_id = $1
-       AND student_id = $2
-       AND title = $3
-       AND total_marks = $4
-     ORDER BY updated_at DESC, created_at DESC
-     LIMIT 1`,
-    [classroomId, studentId, title, totalMarks]
-  );
-};
-
-const syncAssignmentMark = async ({
-  assignmentId,
-  classroomId,
-  studentId,
-  submissionId,
-  title,
-  grade,
-  totalMarks,
-  feedback,
-  gradedAt,
-}) => {
-  const markDate = gradedAt
-    ? new Date(gradedAt).toISOString().slice(0, 10)
-    : new Date().toISOString().slice(0, 10);
-  const existingMark = await findExistingAssignmentMark({
-    assignmentId,
-    classroomId,
-    studentId,
-    submissionId,
-    title,
-    totalMarks,
-  });
-
-  if (existingMark) {
+  if (existing) {
     const rows = await db.query(
       `UPDATE classroom_marks SET
-         classroom_id = $1,
-         student_id = $2,
-         assignment_id = $3,
-         submission_id = $4,
-         source = 'assignment',
-         title = $5,
-         marks_obtained = $6,
-         total_marks = $7,
-         feedback = $8,
-         date = $9,
-         updated_at = NOW()
-       WHERE id = $10
-       RETURNING *`,
-      [
-        classroomId,
-        studentId,
-        assignmentId,
-        submissionId,
-        title,
-        grade,
-        totalMarks,
-        feedback || '',
-        markDate,
-        existingMark.id,
-      ]
+         classroom_id = $1, student_id = $2, assignment_id = $3, submission_id = $4,
+         source = 'assignment', title = $5, marks_obtained = $6, total_marks = $7,
+         feedback = $8, date = $9, updated_at = NOW()
+       WHERE id = $10 RETURNING *`,
+      [classroomId, studentId, assignmentId, submissionId, title, grade, totalMarks, feedback || '', markDate, existing.id]
     );
     return rows[0];
   }
 
   const rows = await db.query(
-    `INSERT INTO classroom_marks (
-       classroom_id,
-       student_id,
-       assignment_id,
-       submission_id,
-       source,
-       title,
-       marks_obtained,
-       total_marks,
-       feedback,
-       date
-     )
-     VALUES ($1, $2, $3, $4, 'assignment', $5, $6, $7, $8, $9)
-     RETURNING *`,
-    [
-      classroomId,
-      studentId,
-      assignmentId,
-      submissionId,
-      title,
-      grade,
-      totalMarks,
-      feedback || '',
-      markDate,
-    ]
+    `INSERT INTO classroom_marks (classroom_id, student_id, assignment_id, submission_id, source, title, marks_obtained, total_marks, feedback, date)
+     VALUES ($1, $2, $3, $4, 'assignment', $5, $6, $7, $8, $9) RETURNING *`,
+    [classroomId, studentId, assignmentId, submissionId, title, grade, totalMarks, feedback || '', markDate]
   );
   return rows[0];
-};
+}
 
-const syncAssignmentMarksForUpdatedAssignment = async (assignment) => {
-  await db.query(
-    `UPDATE classroom_marks SET
-       title = $1,
-       total_marks = $2,
-       updated_at = NOW()
-     WHERE assignment_id = $3`,
-    [assignment.title, assignment.points, assignment.id]
-  );
-};
-
-const upsertAssignmentAnnouncement = async ({
-  assignmentId,
-  classroomId,
-  title,
-  content,
-  authorId,
-  legacyTitles = [],
-}) => {
-  const existingAnnouncement = await db.queryOne(
+async function upsertAssignmentAnnouncement({ assignmentId, classroomId, title, content, authorId, legacyTitles = [] }) {
+  const existing = await db.queryOne(
     'SELECT id FROM classroom_announcements WHERE assignment_id = $1',
     [assignmentId]
   );
 
-  let targetAnnouncementId = existingAnnouncement?.id || null;
-
-  if (!targetAnnouncementId && legacyTitles.length) {
-    const legacyAnnouncement = await db.queryOne(
-      `SELECT id
-       FROM classroom_announcements
-       WHERE assignment_id IS NULL
-         AND classroom_id = $1
-         AND title = ANY($2::text[])
-       ORDER BY created_at DESC
-       LIMIT 1`,
+  let targetId = existing?.id;
+  if (!targetId && legacyTitles.length) {
+    const legacy = await db.queryOne(
+      `SELECT id FROM classroom_announcements
+       WHERE assignment_id IS NULL AND classroom_id = $1 AND title = ANY($2::text[])
+       ORDER BY created_at DESC LIMIT 1`,
       [classroomId, legacyTitles]
     );
-    targetAnnouncementId = legacyAnnouncement?.id || null;
+    targetId = legacy?.id;
   }
 
-  if (targetAnnouncementId) {
+  if (targetId) {
     await db.query(
-      `UPDATE classroom_announcements SET
-         classroom_id = $1,
-         title = $2,
-         content = $3,
-         assignment_id = $4,
-         updated_at = NOW()
+      `UPDATE classroom_announcements SET classroom_id = $1, title = $2, content = $3, assignment_id = $4, updated_at = NOW()
        WHERE id = $5`,
-      [classroomId, title, content, assignmentId, targetAnnouncementId]
+      [classroomId, title, content, assignmentId, targetId]
     );
     return;
   }
@@ -329,18 +165,9 @@ const upsertAssignmentAnnouncement = async ({
      VALUES ($1, $2, $3, $4, $5)`,
     [classroomId, title, content, assignmentId, authorId]
   );
-};
+}
 
-const syncAssignmentDeadlines = async ({
-  assignmentId,
-  studentIds,
-  title,
-  description,
-  classroom,
-  dueDate,
-  priority,
-  legacyTitles = [],
-}) => {
+async function syncAssignmentDeadlines({ assignmentId, studentIds, title, description, classroom, dueDate, priority, legacyTitles = [] }) {
   if (!studentIds.length || !dueDate) {
     await db.query('DELETE FROM deadlines WHERE assignment_id = $1', [assignmentId]);
     return;
@@ -348,14 +175,8 @@ const syncAssignmentDeadlines = async ({
 
   if (legacyTitles.length) {
     await db.query(
-      `UPDATE deadlines SET
-         assignment_id = $1,
-         updated_at = NOW()
-       WHERE assignment_id IS NULL
-         AND type = 'assignment'
-         AND course_code = $2
-         AND title = ANY($3::text[])
-         AND user_id = ANY($4::int[])`,
+      `UPDATE deadlines SET assignment_id = $1, updated_at = NOW()
+       WHERE assignment_id IS NULL AND type = 'assignment' AND course_code = $2 AND title = ANY($3::text[]) AND user_id = ANY($4::int[])`,
       [assignmentId, classroom.course_code, legacyTitles, studentIds]
     );
   }
@@ -364,86 +185,54 @@ const syncAssignmentDeadlines = async ({
     'SELECT id, user_id FROM deadlines WHERE assignment_id = $1',
     [assignmentId]
   );
-  const desiredStudentIds = new Set(studentIds.map(Number));
-  const staleDeadlineIds = existingDeadlines
-    .filter((deadline) => !desiredStudentIds.has(Number(deadline.user_id)))
-    .map((deadline) => deadline.id);
-
-  await deleteRowsByIds('deadlines', staleDeadlineIds);
+  const desired = new Set(studentIds.map(Number));
+  const staleIds = existingDeadlines.filter((d) => !desired.has(Number(d.user_id))).map((d) => d.id);
+  await deleteRows('deadlines', staleIds);
 
   await db.query(
     `UPDATE deadlines SET
-       title = $1,
-       description = $2,
-       course_code = $3,
-       course_name = $4,
-       deadline_date = $5,
-       type = 'assignment',
-       priority = $6,
-       updated_at = NOW()
+       title = $1, description = $2, course_code = $3, course_name = $4,
+       deadline_date = $5, type = 'assignment', priority = $6, updated_at = NOW()
      WHERE assignment_id = $7`,
     [title, description, classroom.course_code, classroom.course_name, dueDate, priority, assignmentId]
   );
 
-  const existingStudentIds = new Set(
-    existingDeadlines
-      .filter((deadline) => desiredStudentIds.has(Number(deadline.user_id)))
-      .map((deadline) => Number(deadline.user_id))
-  );
-  const missingStudentIds = studentIds.filter((studentId) => !existingStudentIds.has(Number(studentId)));
-  if (!missingStudentIds.length) return;
+  const existingSet = new Set(existingDeadlines.filter((d) => desired.has(Number(d.user_id))).map((d) => Number(d.user_id)));
+  const missing = studentIds.filter((id) => !existingSet.has(Number(id)));
+  if (!missing.length) return;
 
-  const placeholders = [];
+  const ph = [];
   const params = [];
-
-  missingStudentIds.forEach((studentId, index) => {
-    const base = index * 8;
-    placeholders.push(
-      `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5}, $${base + 6}, $${base + 7}, $${base + 8})`
-    );
-    params.push(
-      title,
-      description,
-      classroom.course_code,
-      classroom.course_name,
-      dueDate,
-      assignmentId,
-      priority,
-      Number(studentId)
-    );
+  missing.forEach((id, idx) => {
+    const b = idx * 8;
+    ph.push(`($${b + 1}, $${b + 2}, $${b + 3}, $${b + 4}, $${b + 5}, $${b + 6}, $${b + 7}, $${b + 8})`);
+    params.push(title, description, classroom.course_code, classroom.course_name, dueDate, assignmentId, priority, Number(id));
   });
 
   await db.query(
     `INSERT INTO deadlines (title, description, course_code, course_name, deadline_date, assignment_id, priority, user_id)
-     VALUES ${placeholders.join(', ')}`,
+     VALUES ${ph.join(', ')}`,
     params
   );
-};
+}
 
-const canAccessClassroom = async (classroomId, user) => {
+async function canAccessClassroom(classroomId, user) {
   if (user.role === 'admin') return true;
-
-  const classroom = await db.queryOne(
-    'SELECT teacher_id FROM classrooms WHERE id = $1',
-    [classroomId]
-  );
-
+  const classroom = await db.queryOne('SELECT teacher_id FROM classrooms WHERE id = $1', [classroomId]);
   if (!classroom) return false;
   if (classroom.teacher_id === user.id) return true;
   if (user.role !== 'student') return false;
 
-  const enrollment = await db.queryOne(
+  const row = await db.queryOne(
     'SELECT 1 FROM classroom_students WHERE classroom_id = $1 AND student_id = $2',
     [classroomId, user.id]
   );
+  return Boolean(row);
+}
 
-  return !!enrollment;
-};
-
-exports.createAssignment = async (req, res) => {
+exports.createAssignment = async (req, res, next) => {
   try {
     const { classroom_id, title, description, due_date, points, attachments } = req.body;
-
     if (!classroom_id || !title) {
       return res.status(400).json({ success: false, message: 'classroom_id and title required.' });
     }
@@ -456,53 +245,36 @@ exports.createAssignment = async (req, res) => {
     }
 
     const normalizedPoints = parsePoints(points, 100);
-    const storedAttachments = req.file
-      ? [req.file.filename]
-      : normalizeAttachments(attachments);
+    const storedAttachments = req.file ? [req.file.filename] : normalizeAttachments(attachments);
 
     const rows = await db.query(
       `INSERT INTO assignments (classroom_id, teacher_id, title, description, due_date, points, attachments)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
-       RETURNING *`,
-      [
-        classroom_id,
-        req.user.id,
-        title,
-        description || '',
-        due_date || null,
-        normalizedPoints,
-        serializeAttachmentsForDb(storedAttachments),
-      ]
+       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+      [classroom_id, req.user.id, title, description || '', due_date || null, normalizedPoints, serializeAttachments(storedAttachments)]
     );
 
     const assignment = withAttachmentMetadata(rows[0]);
-
     const studentIds = await getClassroomStudentIds(classroom_id);
-    const announcementTitle = buildAssignmentAnnouncementTitle(title, 'created');
-    const announcementContent = buildAssignmentSummary({
-      classroom,
-      description,
-      dueDate: due_date,
-      points: normalizedPoints,
-    });
+    const annTitle = `New Assignment: ${title}`;
+    const annContent = buildAssignmentSummary({ classroom, description, dueDate: due_date, points: normalizedPoints });
 
     await upsertAssignmentAnnouncement({
       assignmentId: assignment.id,
       classroomId: classroom_id,
-      title: announcementTitle,
-      content: announcementContent,
+      title: annTitle,
+      content: annContent,
       authorId: req.user.id,
-      legacyTitles: [announcementTitle],
+      legacyTitles: [annTitle],
     });
 
     await syncAssignmentDeadlines({
       assignmentId: assignment.id,
       studentIds,
       title,
-      description: announcementContent,
+      description: annContent,
       classroom,
       dueDate: due_date,
-      priority: getDeadlinePriority(due_date),
+      priority: getPriority(due_date),
       legacyTitles: [title],
     });
 
@@ -510,7 +282,7 @@ exports.createAssignment = async (req, res) => {
       await notificationService.notify('ASSIGNMENT_CREATED', {
         userIds: studentIds,
         title: `New Assignment: ${title}`,
-        message: announcementContent,
+        message: annContent,
         type: 'deadline',
         referenceId: assignment.id,
       });
@@ -518,11 +290,11 @@ exports.createAssignment = async (req, res) => {
 
     res.status(201).json({ success: true, assignment });
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    next(err);
   }
 };
 
-exports.updateAssignment = async (req, res) => {
+exports.updateAssignment = async (req, res, next) => {
   try {
     const { id } = req.params;
     const { title, description, due_date, points, attachments } = req.body;
@@ -543,84 +315,61 @@ exports.updateAssignment = async (req, res) => {
 
     const rows = await db.query(
       `UPDATE assignments SET
-         title = $1,
-         description = $2,
-         due_date = $3,
-         points = $4,
-         attachments = $5,
-         updated_at = NOW()
-       WHERE id = $6
-       RETURNING *`,
-      [
-        title,
-        description || '',
-        due_date || null,
-        normalizedPoints,
-        serializeAttachmentsForDb(nextAttachments),
-        id,
-      ]
+         title = $1, description = $2, due_date = $3, points = $4, attachments = $5, updated_at = NOW()
+       WHERE id = $6 RETURNING *`,
+      [title, description || '', due_date || null, normalizedPoints, serializeAttachments(nextAttachments), id]
     );
 
-    const updatedAssignment = withAttachmentMetadata(rows[0]);
+    const updated = withAttachmentMetadata(rows[0]);
     const classroom = await db.queryOne('SELECT * FROM classrooms WHERE id = $1', [assignment.classroom_id]);
     const studentIds = await getClassroomStudentIds(assignment.classroom_id);
-    const legacyAnnouncementTitles = [
-      buildAssignmentAnnouncementTitle(assignment.title, 'created'),
-      buildAssignmentAnnouncementTitle(assignment.title, 'updated'),
-      buildAssignmentAnnouncementTitle(updatedAssignment.title, 'created'),
-      buildAssignmentAnnouncementTitle(updatedAssignment.title, 'updated'),
-    ];
-    const legacyDeadlineTitles = [assignment.title, updatedAssignment.title];
-    const announcementTitle = buildAssignmentAnnouncementTitle(updatedAssignment.title, 'updated');
-    const announcementContent = buildAssignmentSummary({
-      classroom,
-      description: updatedAssignment.description,
-      dueDate: updatedAssignment.due_date,
-      points: updatedAssignment.points,
-    });
+    const annTitle = `Updated Assignment: ${updated.title}`;
+    const annContent = buildAssignmentSummary({ classroom, description: updated.description, dueDate: updated.due_date, points: updated.points });
 
     await upsertAssignmentAnnouncement({
-      assignmentId: updatedAssignment.id,
+      assignmentId: updated.id,
       classroomId: assignment.classroom_id,
-      title: announcementTitle,
-      content: announcementContent,
+      title: annTitle,
+      content: annContent,
       authorId: req.user.id,
-      legacyTitles: legacyAnnouncementTitles,
+      legacyTitles: [`New Assignment: ${assignment.title}`, `Updated Assignment: ${assignment.title}`, `New Assignment: ${updated.title}`, annTitle],
     });
 
     await syncAssignmentDeadlines({
-      assignmentId: updatedAssignment.id,
+      assignmentId: updated.id,
       studentIds,
-      title: updatedAssignment.title,
-      description: announcementContent,
+      title: updated.title,
+      description: annContent,
       classroom,
-      dueDate: updatedAssignment.due_date,
-      priority: getDeadlinePriority(updatedAssignment.due_date),
-      legacyTitles: legacyDeadlineTitles,
+      dueDate: updated.due_date,
+      priority: getPriority(updated.due_date),
+      legacyTitles: [assignment.title, updated.title],
     });
 
-    await syncAssignmentMarksForUpdatedAssignment(updatedAssignment);
+    await db.query(
+      `UPDATE classroom_marks SET title = $1, total_marks = $2, updated_at = NOW() WHERE assignment_id = $3`,
+      [updated.title, updated.points, updated.id]
+    );
 
     if (studentIds.length) {
       await notificationService.notify('ASSIGNMENT_UPDATED', {
         userIds: studentIds,
-        title: `Assignment Updated: ${updatedAssignment.title}`,
-        message: announcementContent,
+        title: `Assignment Updated: ${updated.title}`,
+        message: annContent,
         type: 'deadline',
-        referenceId: updatedAssignment.id,
+        referenceId: updated.id,
       });
     }
 
-    res.json({ success: true, assignment: updatedAssignment });
+    res.json({ success: true, assignment: updated });
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    next(err);
   }
 };
 
-exports.deleteAssignment = async (req, res) => {
+exports.deleteAssignment = async (req, res, next) => {
   try {
     const { id } = req.params;
-
     const assignment = await db.queryOne('SELECT * FROM assignments WHERE id = $1', [id]);
     if (!assignment) return res.status(404).json({ success: false, message: 'Assignment not found.' });
 
@@ -630,33 +379,24 @@ exports.deleteAssignment = async (req, res) => {
 
     const classroom = await db.queryOne('SELECT * FROM classrooms WHERE id = $1', [assignment.classroom_id]);
     const studentIds = await getClassroomStudentIds(assignment.classroom_id);
-    const legacyAnnouncementTitles = [
-      buildAssignmentAnnouncementTitle(assignment.title, 'created'),
-      buildAssignmentAnnouncementTitle(assignment.title, 'updated'),
-    ];
-    const legacyDeadlineTitles = [assignment.title];
+    const legacyAnnTitles = [`New Assignment: ${assignment.title}`, `Updated Assignment: ${assignment.title}`];
+
     await db.query('DELETE FROM classroom_announcements WHERE assignment_id = $1', [id]);
-    if (legacyAnnouncementTitles.length) {
+    if (legacyAnnTitles.length) {
       await db.query(
-        `DELETE FROM classroom_announcements
-         WHERE assignment_id IS NULL
-           AND classroom_id = $1
-           AND title = ANY($2::text[])`,
-        [assignment.classroom_id, legacyAnnouncementTitles]
+        `DELETE FROM classroom_announcements WHERE assignment_id IS NULL AND classroom_id = $1 AND title = ANY($2::text[])`,
+        [assignment.classroom_id, legacyAnnTitles]
       );
     }
+
     await db.query('DELETE FROM deadlines WHERE assignment_id = $1', [id]);
     if (studentIds.length) {
       await db.query(
-        `DELETE FROM deadlines
-         WHERE assignment_id IS NULL
-           AND type = 'assignment'
-           AND course_code = $1
-           AND title = ANY($2::text[])
-           AND user_id = ANY($3::int[])`,
-        [classroom?.course_code || '', legacyDeadlineTitles, studentIds]
+        `DELETE FROM deadlines WHERE assignment_id IS NULL AND type = 'assignment' AND course_code = $1 AND title = ANY($2::text[]) AND user_id = ANY($3::int[])`,
+        [classroom?.course_code || '', [assignment.title], studentIds]
       );
     }
+
     await db.query('DELETE FROM assignments WHERE id = $1', [id]);
 
     if (studentIds.length) {
@@ -671,11 +411,11 @@ exports.deleteAssignment = async (req, res) => {
 
     res.json({ success: true, message: 'Assignment deleted successfully.' });
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    next(err);
   }
 };
 
-exports.getAssignments = async (req, res) => {
+exports.getAssignments = async (req, res, next) => {
   try {
     const classroom_id = parseInt(req.query.classroom_id, 10);
     if (!classroom_id) return res.status(400).json({ success: false, message: 'classroom_id required.' });
@@ -688,9 +428,7 @@ exports.getAssignments = async (req, res) => {
         'SELECT 1 FROM classroom_students WHERE classroom_id = $1 AND student_id = $2',
         [classroom_id, req.user.id]
       );
-      if (!isEnrolled) {
-        return res.status(403).json({ success: false, message: 'Access denied.' });
-      }
+      if (!isEnrolled) return res.status(403).json({ success: false, message: 'Access denied.' });
     }
 
     const assignments = await db.query(
@@ -704,14 +442,13 @@ exports.getAssignments = async (req, res) => {
 
     res.json({ success: true, assignments: assignments.map(withAttachmentMetadata) });
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    next(err);
   }
 };
 
-exports.getAssignment = async (req, res) => {
+exports.getAssignment = async (req, res, next) => {
   try {
     const { id } = req.params;
-
     const assignment = await db.queryOne(
       `SELECT a.*, u.name AS teacher_name, c.course_code, c.course_name
        FROM assignments a
@@ -728,25 +465,21 @@ exports.getAssignment = async (req, res) => {
         'SELECT 1 FROM classroom_students WHERE classroom_id = $1 AND student_id = $2',
         [assignment.classroom_id, req.user.id]
       );
-      if (!isEnrolled) {
-        return res.status(403).json({ success: false, message: 'Access denied.' });
-      }
+      if (!isEnrolled) return res.status(403).json({ success: false, message: 'Access denied.' });
     }
 
     res.json({ success: true, assignment: withAttachmentMetadata(assignment) });
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    next(err);
   }
 };
 
-exports.submitAssignment = async (req, res) => {
+exports.submitAssignment = async (req, res, next) => {
   try {
     const assignment_id = parseInt(req.params.id || req.body.assignment_id, 10);
     const submission_text = req.body.submission_text ?? req.body.comments ?? '';
 
-    if (!assignment_id) {
-      return res.status(400).json({ success: false, message: 'assignment_id required.' });
-    }
+    if (!assignment_id) return res.status(400).json({ success: false, message: 'assignment_id required.' });
 
     const assignment = await db.queryOne('SELECT * FROM assignments WHERE id = $1', [assignment_id]);
     if (!assignment) return res.status(404).json({ success: false, message: 'Assignment not found.' });
@@ -755,53 +488,40 @@ exports.submitAssignment = async (req, res) => {
       'SELECT 1 FROM classroom_students WHERE classroom_id = $1 AND student_id = $2',
       [assignment.classroom_id, req.user.id]
     );
-    if (!isEnrolled) {
-      return res.status(403).json({ success: false, message: 'You are not enrolled in this classroom.' });
-    }
+    if (!isEnrolled) return res.status(403).json({ success: false, message: 'You are not enrolled in this classroom.' });
 
     const existing = await db.queryOne(
       'SELECT * FROM assignment_submissions WHERE assignment_id = $1 AND student_id = $2',
       [assignment_id, req.user.id]
     );
 
-    const incomingAttachments = req.file
-      ? [req.file.filename]
-      : normalizeAttachments(req.body.attachments);
-
+    const incoming = req.file ? [req.file.filename] : normalizeAttachments(req.body.attachments);
     let submission;
-    if (existing) {
-      const nextAttachments = incomingAttachments.length
-        ? incomingAttachments
-        : normalizeAttachments(existing.attachments);
 
+    if (existing) {
+      const nextAttachments = incoming.length ? incoming : normalizeAttachments(existing.attachments);
       const rows = await db.query(
-        `UPDATE assignment_submissions SET
-           submission_text = $1,
-           attachments = $2,
-           submitted_at = NOW(),
-           updated_at = NOW()
-         WHERE id = $3
-         RETURNING *`,
-        [submission_text, serializeAttachmentsForDb(nextAttachments), existing.id]
+        `UPDATE assignment_submissions SET submission_text = $1, attachments = $2, submitted_at = NOW(), updated_at = NOW()
+         WHERE id = $3 RETURNING *`,
+        [submission_text, serializeAttachments(nextAttachments), existing.id]
       );
       submission = rows[0];
     } else {
       const rows = await db.query(
         `INSERT INTO assignment_submissions (assignment_id, student_id, submission_text, attachments, submitted_at)
-         VALUES ($1, $2, $3, $4, NOW())
-         RETURNING *`,
-        [assignment_id, req.user.id, submission_text, serializeAttachmentsForDb(incomingAttachments)]
+         VALUES ($1, $2, $3, $4, NOW()) RETURNING *`,
+        [assignment_id, req.user.id, submission_text, serializeAttachments(incoming)]
       );
       submission = rows[0];
     }
 
     res.json({ success: true, submission: withAttachmentMetadata(submission) });
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    next(err);
   }
 };
 
-exports.gradeSubmission = async (req, res) => {
+exports.gradeSubmission = async (req, res, next) => {
   try {
     const { id } = req.params;
     const { grade, feedback } = req.body;
@@ -821,27 +541,22 @@ exports.gradeSubmission = async (req, res) => {
     }
 
     const rows = await db.query(
-      `UPDATE assignment_submissions SET
-         grade = $1,
-         feedback = $2,
-         graded_at = NOW(),
-         updated_at = NOW()
-       WHERE id = $3
-       RETURNING *`,
+      `UPDATE assignment_submissions SET grade = $1, feedback = $2, graded_at = NOW(), updated_at = NOW()
+       WHERE id = $3 RETURNING *`,
       [grade, feedback || '', id]
     );
 
-    const updatedSubmission = rows[0];
+    const updated = rows[0];
     const mark = await syncAssignmentMark({
       assignmentId: submission.assignment_id,
       classroomId: submission.classroom_id,
       studentId: submission.student_id,
-      submissionId: updatedSubmission.id,
+      submissionId: updated.id,
       title: submission.title,
       grade,
       totalMarks: parsePoints(submission.points, 100),
       feedback,
-      gradedAt: updatedSubmission.graded_at || new Date(),
+      gradedAt: updated.graded_at || new Date(),
     });
 
     await notificationService.notify('SUBMISSION_GRADED', {
@@ -849,16 +564,16 @@ exports.gradeSubmission = async (req, res) => {
       title: `Assignment Graded: ${submission.title}`,
       message: `Your submission has been graded. Score: ${grade}/${submission.points || 100}`,
       type: 'resource',
-      referenceId: updatedSubmission.id,
+      referenceId: updated.id,
     });
 
-    res.json({ success: true, submission: withAttachmentMetadata(updatedSubmission), mark });
+    res.json({ success: true, submission: withAttachmentMetadata(updated), mark });
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    next(err);
   }
 };
 
-exports.getSubmissions = async (req, res) => {
+exports.getSubmissions = async (req, res, next) => {
   try {
     const assignment_id = parseInt(req.query.assignment_id, 10);
     if (!assignment_id) return res.status(400).json({ success: false, message: 'assignment_id required.' });
@@ -881,11 +596,11 @@ exports.getSubmissions = async (req, res) => {
 
     res.json({ success: true, submissions: submissions.map(withAttachmentMetadata) });
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    next(err);
   }
 };
 
-exports.getMySubmission = async (req, res) => {
+exports.getMySubmission = async (req, res, next) => {
   try {
     const assignment_id = parseInt(req.query.assignment_id, 10);
     if (!assignment_id) return res.status(400).json({ success: false, message: 'assignment_id required.' });
@@ -900,37 +615,32 @@ exports.getMySubmission = async (req, res) => {
 
     res.json({ success: true, submission: withAttachmentMetadata(submission) });
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    next(err);
   }
 };
 
-exports.downloadAssignmentAttachment = async (req, res) => {
+exports.downloadAssignmentAttachment = async (req, res, next) => {
   try {
     const assignment = await db.queryOne('SELECT * FROM assignments WHERE id = $1', [req.params.id]);
     if (!assignment) return res.status(404).json({ success: false, message: 'Assignment not found.' });
 
-    const hasAccess = await canAccessClassroom(assignment.classroom_id, req.user);
-    if (!hasAccess) {
+    if (!(await canAccessClassroom(assignment.classroom_id, req.user))) {
       return res.status(403).json({ success: false, message: 'Access denied.' });
     }
 
     const filePath = getPrimaryAttachmentPath(assignment.attachments);
-    if (!filePath) {
-      return res.status(404).json({ success: false, message: 'No attachment found for this assignment.' });
-    }
+    if (!filePath) return res.status(404).json({ success: false, message: 'No attachment found for this assignment.' });
 
-    const absolutePath = path.join(ASSIGNMENT_UPLOAD_DIR, filePath);
-    if (!fs.existsSync(absolutePath)) {
-      return res.status(404).json({ success: false, message: 'Attachment file is missing.' });
-    }
+    const absPath = path.join(UPLOAD_DIR, filePath);
+    if (!fs.existsSync(absPath)) return res.status(404).json({ success: false, message: 'Attachment file is missing.' });
 
-    res.download(absolutePath, path.basename(filePath));
+    res.download(absPath, path.basename(filePath));
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    next(err);
   }
 };
 
-exports.downloadSubmissionAttachment = async (req, res) => {
+exports.downloadSubmissionAttachment = async (req, res, next) => {
   try {
     const submission = await db.queryOne(
       `SELECT s.*, a.teacher_id
@@ -951,17 +661,13 @@ exports.downloadSubmissionAttachment = async (req, res) => {
     }
 
     const filePath = getPrimaryAttachmentPath(submission.attachments);
-    if (!filePath) {
-      return res.status(404).json({ success: false, message: 'No attachment found for this submission.' });
-    }
+    if (!filePath) return res.status(404).json({ success: false, message: 'No attachment found for this submission.' });
 
-    const absolutePath = path.join(ASSIGNMENT_UPLOAD_DIR, filePath);
-    if (!fs.existsSync(absolutePath)) {
-      return res.status(404).json({ success: false, message: 'Submission file is missing.' });
-    }
+    const absPath = path.join(UPLOAD_DIR, filePath);
+    if (!fs.existsSync(absPath)) return res.status(404).json({ success: false, message: 'Submission file is missing.' });
 
-    res.download(absolutePath, path.basename(filePath));
+    res.download(absPath, path.basename(filePath));
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    next(err);
   }
 };

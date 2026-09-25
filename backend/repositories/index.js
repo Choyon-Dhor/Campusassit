@@ -1,27 +1,20 @@
-// ============================================================
-// repositories/index.js — All Repository Implementations (pg)
-// ============================================================
 const BaseRepository = require('./BaseRepository');
 const db = require('../config/database');
 
-// Day ordering helper (replaces MySQL's FIELD())
 const DAY_ORDER = `CASE day
   WHEN 'Monday'    THEN 1 WHEN 'Tuesday'  THEN 2 WHEN 'Wednesday' THEN 3
   WHEN 'Thursday'  THEN 4 WHEN 'Friday'   THEN 5 WHEN 'Saturday'  THEN 6
   WHEN 'Sunday'    THEN 7 ELSE 8 END`;
 
-// ── User Repository ──────────────────────────────────────────
 class UserRepository extends BaseRepository {
   constructor() { super('users'); }
 
   async findByEmail(email) {
-    return await this.db.queryOne(
-      `SELECT * FROM users WHERE email = $1`, [email]
-    );
+    return this.db.queryOne(`SELECT * FROM users WHERE email = $1`, [email]);
   }
 
   async findActive() {
-    return await this.db.query(
+    return this.db.query(
       `SELECT id, name, email, role, department, avatar,
               student_number, batch_number, batch_section, created_at
        FROM users WHERE is_active = TRUE ORDER BY name`
@@ -29,16 +22,15 @@ class UserRepository extends BaseRepository {
   }
 
   async findAllForAdmin() {
-    return await this.db.query(
+    return this.db.query(
       `SELECT id, name, email, role, department, avatar, is_active,
               student_number, batch_number, batch_section, created_at
-       FROM users
-       ORDER BY name`
+       FROM users ORDER BY name`
     );
   }
 
   async findTeachers() {
-    return await this.db.query(
+    return this.db.query(
       `SELECT id, name, email, department
        FROM users WHERE role = 'teacher' AND is_active = TRUE ORDER BY name`
     );
@@ -52,15 +44,14 @@ class PasswordResetTokenRepository extends BaseRepository {
     await this.markUserTokensUsed(userId);
     const rows = await this.db.query(
       `INSERT INTO password_reset_tokens (user_id, token_hash, expires_at)
-       VALUES ($1, $2, $3)
-       RETURNING *`,
+       VALUES ($1, $2, $3) RETURNING *`,
       [userId, tokenHash, expiresAt]
     );
     return rows[0];
   }
 
   async findValidByHash(tokenHash) {
-    return await this.db.queryOne(
+    return this.db.queryOne(
       `SELECT prt.*, u.email, u.role, u.is_active
        FROM password_reset_tokens prt
        JOIN users u ON u.id = prt.user_id
@@ -73,15 +64,13 @@ class PasswordResetTokenRepository extends BaseRepository {
   }
 
   async markUserTokensUsed(userId) {
-    return await this.db.query(
-      `UPDATE password_reset_tokens
-       SET used_at = NOW()
-       WHERE user_id = $1 AND used_at IS NULL`,
+    return this.db.query(
+      `UPDATE password_reset_tokens SET used_at = NOW() WHERE user_id = $1 AND used_at IS NULL`,
       [userId]
     );
   }
 }
-// ── Announcement Repository ──────────────────────────────────
+
 class AnnouncementRepository extends BaseRepository {
   constructor() { super('announcements'); }
 
@@ -103,20 +92,20 @@ class AnnouncementRepository extends BaseRepository {
     sql += ` ORDER BY a.is_pinned DESC, a.created_at DESC
              LIMIT $${params.length - 1} OFFSET $${params.length}`;
 
-    return await this.db.query(sql, params);
+    return this.db.query(sql, params);
   }
 
   async countByRole(role = null) {
     if (!role || role === 'admin') return this.count();
     const rows = await this.db.query(
       `SELECT COUNT(*)::int AS count FROM announcements
-       WHERE target_role = 'all' OR target_role = $1`, [role]
+       WHERE target_role = 'all' OR target_role = $1`,
+      [role]
     );
     return rows[0]?.count || 0;
   }
 }
 
-// ── Resource Repository ──────────────────────────────────────
 class ResourceRepository extends BaseRepository {
   constructor() { super('resources'); }
 
@@ -136,42 +125,42 @@ class ResourceRepository extends BaseRepository {
       const s = `%${filters.search}%`;
       params.push(s, s, s);
       const i = params.length;
-      sql += ` AND (r.title ILIKE $${i-2} OR r.course_name ILIKE $${i-1} OR r.course_code ILIKE $${i})`;
+      sql += ` AND (r.title ILIKE $${i - 2} OR r.course_name ILIKE $${i - 1} OR r.course_code ILIKE $${i})`;
     }
 
     const orderMap = {
-      newest:      'r.created_at DESC',
-      rating:      'r.average_rating DESC',
-      downloads:   'r.download_count DESC',
+      newest: 'r.created_at DESC',
+      rating: 'r.average_rating DESC',
+      downloads: 'r.download_count DESC',
       recommended: 'r.recommendation_score DESC',
     };
     sql += ` ORDER BY ${orderMap[filters.sort] || orderMap.recommended}`;
     params.push(limit, offset);
     sql += ` LIMIT $${params.length - 1} OFFSET $${params.length}`;
 
-    return await this.db.query(sql, params);
+    return this.db.query(sql, params);
   }
 
   async incrementDownload(id) {
-    return await this.db.query(
-      `UPDATE resources SET download_count = download_count + 1 WHERE id = $1`, [id]
+    return this.db.query(
+      `UPDATE resources SET download_count = download_count + 1 WHERE id = $1`,
+      [id]
     );
   }
 
   async updateAverageRating(id) {
     const rows = await this.db.query(
       `SELECT COALESCE(AVG(rating), 0)::numeric(3,2) AS avg
-       FROM resource_ratings WHERE resource_id = $1`, [id]
+       FROM resource_ratings WHERE resource_id = $1`,
+      [id]
     );
     const avg = parseFloat(rows[0]?.avg || 0);
-    await this.db.query(
-      `UPDATE resources SET average_rating = $1 WHERE id = $2`, [avg, id]
-    );
+    await this.db.query(`UPDATE resources SET average_rating = $1 WHERE id = $2`, [avg, id]);
     return avg;
   }
 
   async getUserRating(resourceId, userId) {
-    return await this.db.queryOne(
+    return this.db.queryOne(
       `SELECT * FROM resource_ratings WHERE resource_id = $1 AND user_id = $2`,
       [resourceId, userId]
     );
@@ -189,7 +178,6 @@ class ResourceRepository extends BaseRepository {
   }
 }
 
-// ── Study Group Repository ───────────────────────────────────
 class StudyGroupRepository extends BaseRepository {
   constructor() {
     super('study_groups');
@@ -197,25 +185,20 @@ class StudyGroupRepository extends BaseRepository {
   }
 
   async hasUsersLastActiveColumn() {
-    if (this.usersLastActiveColumn !== null) {
-      return this.usersLastActiveColumn;
-    }
-
+    if (this.usersLastActiveColumn !== null) return this.usersLastActiveColumn;
     const result = await this.db.queryOne(
       `SELECT EXISTS (
-         SELECT 1
-         FROM information_schema.columns
+         SELECT 1 FROM information_schema.columns
          WHERE table_name = 'users' AND column_name = 'last_active_at'
        ) AS exists`
     );
-
     this.usersLastActiveColumn = Boolean(result?.exists);
     return this.usersLastActiveColumn;
   }
 
   async findWithDetails(userId = null) {
     const uid = userId || 0;
-    return await this.db.query(
+    return this.db.query(
       `SELECT sg.*,
               u.name AS creator_name,
               COUNT(DISTINCT sgm.user_id)::int AS member_count,
@@ -231,20 +214,15 @@ class StudyGroupRepository extends BaseRepository {
   }
 
   async getMembers(groupId) {
-    const hasLastActiveColumn = await this.hasUsersLastActiveColumn();
-    const lastActiveSelect = hasLastActiveColumn
+    const hasCol = await this.hasUsersLastActiveColumn();
+    const lastActive = hasCol
       ? `u.last_active_at,
-              CASE
-                WHEN u.last_active_at IS NOT NULL AND u.last_active_at >= NOW() - INTERVAL '2 minutes'
-                THEN TRUE
-                ELSE FALSE
-              END AS is_online,`
-      : `NULL::timestamptz AS last_active_at,
-              FALSE AS is_online,`;
+         CASE WHEN u.last_active_at >= NOW() - INTERVAL '2 minutes' THEN TRUE ELSE FALSE END AS is_online,`
+      : `NULL::timestamptz AS last_active_at, FALSE AS is_online,`;
 
-    return await this.db.query(
+    return this.db.query(
       `SELECT u.id, u.name, u.email, u.department, u.avatar,
-              ${lastActiveSelect}
+              ${lastActive}
               sgm.role, sgm.joined_at
        FROM study_group_members sgm
        LEFT JOIN users u ON sgm.user_id = u.id
@@ -255,7 +233,7 @@ class StudyGroupRepository extends BaseRepository {
   }
 
   async findById(groupId, userId = 0) {
-    return await this.db.queryOne(
+    return this.db.queryOne(
       `SELECT sg.*, u.name AS creator_name,
               COUNT(DISTINCT sgm.user_id)::int AS member_count,
               MAX(CASE WHEN sgm2.user_id = $2 THEN 1 ELSE 0 END)::int AS is_member
@@ -278,7 +256,7 @@ class StudyGroupRepository extends BaseRepository {
   }
 
   async joinGroup(groupId, userId, role = 'member') {
-    return await this.db.query(
+    return this.db.query(
       `INSERT INTO study_group_members (group_id, user_id, role)
        VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`,
       [groupId, userId, role]
@@ -286,18 +264,18 @@ class StudyGroupRepository extends BaseRepository {
   }
 
   async leaveGroup(groupId, userId) {
-    return await this.db.query(
+    return this.db.query(
       `DELETE FROM study_group_members WHERE group_id = $1 AND user_id = $2`,
       [groupId, userId]
     );
   }
 
   async getMessages(groupId) {
-    return await this.getMessagesDetailed(groupId);
+    return this.getMessagesDetailed(groupId);
   }
 
   async getMessagesDetailed(groupId, userId = 0, search = '') {
-    const hasLastActiveColumn = await this.hasUsersLastActiveColumn();
+    const hasCol = await this.hasUsersLastActiveColumn();
     const params = [groupId, userId || 0];
     let searchSql = '';
     if (search && search.trim()) {
@@ -305,9 +283,9 @@ class StudyGroupRepository extends BaseRepository {
       searchSql = ` AND (gm.message ILIKE $${params.length} OR u.name ILIKE $${params.length})`;
     }
 
-    return await this.db.query(
+    return this.db.query(
       `SELECT gm.*, u.name AS user_name, u.avatar,
-              ${hasLastActiveColumn ? 'u.last_active_at' : 'NULL::timestamptz AS last_active_at'},
+              ${hasCol ? 'u.last_active_at' : 'NULL::timestamptz AS last_active_at'},
               COALESCE(reactions.reactions, '[]'::json) AS reactions,
               COALESCE(reads.read_count, 0) AS read_count,
               COALESCE(readers.readers, '[]'::json) AS readers
@@ -362,7 +340,7 @@ class StudyGroupRepository extends BaseRepository {
       attachment_url = null,
       metadata = {},
     } = options;
-    return await this.db.query(
+    return this.db.query(
       `INSERT INTO study_group_messages (group_id, user_id, message, message_type, attachment_name, attachment_url, metadata)
        VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb) RETURNING *`,
       [groupId, userId, message, message_type, attachment_name, attachment_url, JSON.stringify(metadata || {})]
@@ -370,7 +348,7 @@ class StudyGroupRepository extends BaseRepository {
   }
 
   async getAnnouncements(groupId) {
-    return await this.db.query(
+    return this.db.query(
       `SELECT sa.*, u.name AS user_name,
               COALESCE(comment_stats.comment_count, 0) AS comment_count
        FROM study_group_announcements sa
@@ -398,7 +376,7 @@ class StudyGroupRepository extends BaseRepository {
         [groupId]
       );
     }
-    return await this.db.query(
+    return this.db.query(
       `INSERT INTO study_group_announcements (group_id, user_id, title, content, category, is_pinned, content_format)
        VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
       [groupId, userId, title, content, category, is_pinned, content_format]
@@ -406,7 +384,7 @@ class StudyGroupRepository extends BaseRepository {
   }
 
   async getAnnouncementComments(announcementId) {
-    return await this.db.query(
+    return this.db.query(
       `SELECT sac.*, u.name AS user_name, u.avatar
        FROM study_group_announcement_comments sac
        JOIN users u ON u.id = sac.user_id
@@ -417,7 +395,7 @@ class StudyGroupRepository extends BaseRepository {
   }
 
   async addAnnouncementComment(announcementId, userId, content) {
-    return await this.db.query(
+    return this.db.query(
       `INSERT INTO study_group_announcement_comments (announcement_id, user_id, content)
        VALUES ($1, $2, $3) RETURNING *`,
       [announcementId, userId, content]
@@ -425,14 +403,14 @@ class StudyGroupRepository extends BaseRepository {
   }
 
   async findAnnouncementById(announcementId) {
-    return await this.db.queryOne(
+    return this.db.queryOne(
       `SELECT * FROM study_group_announcements WHERE id = $1`,
       [announcementId]
     );
   }
 
   async getResources(groupId) {
-    return await this.db.query(
+    return this.db.query(
       `SELECT sgr.*, u.name AS user_name
        FROM study_group_resources sgr
        JOIN users u ON u.id = sgr.user_id
@@ -442,9 +420,9 @@ class StudyGroupRepository extends BaseRepository {
     );
   }
 
-  async addResource(groupId, userId, resource) {
-    const { title, description, resource_type = 'link', resource_url, file_path } = resource;
-    return await this.db.query(
+  async addResource(groupId, userId, res) {
+    const { title, description, resource_type = 'link', resource_url, file_path } = res;
+    return this.db.query(
       `INSERT INTO study_group_resources (group_id, user_id, title, description, resource_type, resource_url, file_path)
        VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
       [groupId, userId, title, description || null, resource_type, resource_url || null, file_path || null]
@@ -452,7 +430,7 @@ class StudyGroupRepository extends BaseRepository {
   }
 
   async getActivity(groupId, limit = 50) {
-    return await this.db.query(
+    return this.db.query(
       `SELECT ga.*, u.name AS user_name
        FROM study_group_activities ga
        LEFT JOIN users u ON u.id = ga.user_id
@@ -464,7 +442,7 @@ class StudyGroupRepository extends BaseRepository {
   }
 
   async addActivity(groupId, userId, action, payload = {}) {
-    return await this.db.query(
+    return this.db.query(
       `INSERT INTO study_group_activities (group_id, user_id, action, payload)
        VALUES ($1, $2, $3, $4::jsonb) RETURNING *`,
       [groupId, userId, action, JSON.stringify(payload || {})]
@@ -472,26 +450,19 @@ class StudyGroupRepository extends BaseRepository {
   }
 
   async touchUserActivity(userId) {
-    if (!await this.hasUsersLastActiveColumn()) {
-      return await this.db.query(
-        `UPDATE users SET updated_at = NOW() WHERE id = $1`,
-        [userId]
-      );
-    }
-
-    return await this.db.query(
-      `UPDATE users SET last_active_at = NOW(), updated_at = NOW() WHERE id = $1`,
-      [userId]
-    );
+    const hasCol = await this.hasUsersLastActiveColumn();
+    const sql = hasCol
+      ? `UPDATE users SET last_active_at = NOW(), updated_at = NOW() WHERE id = $1`
+      : `UPDATE users SET updated_at = NOW() WHERE id = $1`;
+    return this.db.query(sql, [userId]);
   }
 
   async markMessagesRead(groupId, userId) {
-    return await this.db.query(
+    return this.db.query(
       `INSERT INTO study_group_message_reads (message_id, user_id, read_at)
        SELECT gm.id, $2, NOW()
        FROM study_group_messages gm
-       WHERE gm.group_id = $1
-         AND gm.user_id <> $2
+       WHERE gm.group_id = $1 AND gm.user_id <> $2
        ON CONFLICT (message_id, user_id)
        DO UPDATE SET read_at = EXCLUDED.read_at`,
       [groupId, userId]
@@ -506,30 +477,23 @@ class StudyGroupRepository extends BaseRepository {
     );
 
     if (existing) {
-      await this.db.query(
-        `DELETE FROM study_group_message_reactions WHERE id = $1`,
-        [existing.id]
-      );
+      await this.db.query(`DELETE FROM study_group_message_reactions WHERE id = $1`, [existing.id]);
       return { removed: true };
     }
 
     await this.db.query(
-      `INSERT INTO study_group_message_reactions (message_id, user_id, reaction)
-       VALUES ($1, $2, $3)`,
+      `INSERT INTO study_group_message_reactions (message_id, user_id, reaction) VALUES ($1, $2, $3)`,
       [messageId, userId, reaction]
     );
     return { removed: false };
   }
 
   async findMessageById(messageId) {
-    return await this.db.queryOne(
-      `SELECT * FROM study_group_messages WHERE id = $1`,
-      [messageId]
-    );
+    return this.db.queryOne(`SELECT * FROM study_group_messages WHERE id = $1`, [messageId]);
   }
 
   async setTypingStatus(groupId, userId, isTyping = true) {
-    return await this.db.query(
+    return this.db.query(
       `INSERT INTO study_group_typing_status (group_id, user_id, is_typing, updated_at)
        VALUES ($1, $2, $3, NOW())
        ON CONFLICT (group_id, user_id)
@@ -539,7 +503,7 @@ class StudyGroupRepository extends BaseRepository {
   }
 
   async getTypingUsers(groupId, excludeUserId = 0) {
-    return await this.db.query(
+    return this.db.query(
       `SELECT ts.user_id, u.name AS user_name, ts.updated_at
        FROM study_group_typing_status ts
        JOIN users u ON u.id = ts.user_id
@@ -553,8 +517,6 @@ class StudyGroupRepository extends BaseRepository {
   }
 }
 
-
-// ── Deadline Repository ──────────────────────────────────────
 class DeadlineRepository extends BaseRepository {
   constructor() { super('deadlines'); }
 
@@ -570,11 +532,11 @@ class DeadlineRepository extends BaseRepository {
       sql += ` AND type = $${params.length}`;
     }
     sql += ` ORDER BY deadline_date ASC`;
-    return await this.db.query(sql, params);
+    return this.db.query(sql, params);
   }
 
   async getUpcoming(userId, days = 7) {
-    return await this.db.query(
+    return this.db.query(
       `SELECT * FROM deadlines
        WHERE user_id = $1
          AND is_completed = FALSE
@@ -585,17 +547,16 @@ class DeadlineRepository extends BaseRepository {
   }
 }
 
-// ── Consultation Repository ──────────────────────────────────
 class ConsultationRepository extends BaseRepository {
   constructor() { super('consultation_hours'); }
 
   async findWithTeacher() {
-    return await this.db.query(
+    return this.db.query(
       `SELECT ch.*, u.name AS teacher_name, u.email AS teacher_email, u.department
        FROM consultation_hours ch
        LEFT JOIN users u ON ch.teacher_id = u.id
        WHERE ch.is_active = TRUE
-       ORDER BY ${DAY_ORDER.replace(/day/g,'ch.day')}, ch.start_time`
+       ORDER BY ${DAY_ORDER.replace(/day/g, 'ch.day')}, ch.start_time`
     );
   }
 
@@ -615,35 +576,29 @@ class ConsultationRepository extends BaseRepository {
     if (filters.status)     { params.push(filters.status);     sql += ` AND ca.status = $${params.length}`; }
 
     sql += ` ORDER BY ca.appointment_date ASC, ca.start_time ASC`;
-    return await this.db.query(sql, params);
+    return this.db.query(sql, params);
   }
 
   async createAppointment(data) {
     const keys = Object.keys(data);
-    const vals = Object.values(data);
     const cols = keys.join(', ');
-    const phs  = keys.map((_, i) => `$${i + 1}`).join(', ');
+    const phs = keys.map((_, i) => `$${i + 1}`).join(', ');
     const rows = await this.db.query(
       `INSERT INTO consultation_appointments (${cols}) VALUES (${phs}) RETURNING *`,
-      vals
+      Object.values(data)
     );
-    const appt = rows[0];
-    // Enrich with names
-    const enriched = await this.db.queryOne(
-      `SELECT ca.*,
-              s.name AS student_name,
-              t.name AS teacher_name
+    return this.db.queryOne(
+      `SELECT ca.*, s.name AS student_name, t.name AS teacher_name
        FROM consultation_appointments ca
        LEFT JOIN users s ON ca.student_id = s.id
        LEFT JOIN users t ON ca.teacher_id = t.id
        WHERE ca.id = $1`,
-      [appt.id]
+      [rows[0].id]
     );
-    return enriched;
   }
 
   async updateAppointmentStatus(id, status, teacherNotes = null) {
-    return await this.db.query(
+    return this.db.query(
       `UPDATE consultation_appointments
        SET status = $1, teacher_notes = $2, updated_at = NOW()
        WHERE id = $3`,
@@ -653,12 +608,11 @@ class ConsultationRepository extends BaseRepository {
 }
 
 module.exports = {
-  userRepo:         new UserRepository(),
+  userRepo: new UserRepository(),
   passwordResetTokenRepo: new PasswordResetTokenRepository(),
   announcementRepo: new AnnouncementRepository(),
-  resourceRepo:     new ResourceRepository(),
-  studyGroupRepo:   new StudyGroupRepository(),
-  deadlineRepo:     new DeadlineRepository(),
+  resourceRepo: new ResourceRepository(),
+  studyGroupRepo: new StudyGroupRepository(),
+  deadlineRepo: new DeadlineRepository(),
   consultationRepo: new ConsultationRepository(),
 };
-

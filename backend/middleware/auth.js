@@ -1,20 +1,16 @@
-// ============================================================
-// middleware/auth.js — JWT Authentication Middleware (pg)
-// ============================================================
 const jwt = require('jsonwebtoken');
-const db  = require('../config/database');
+const db = require('../config/database');
 
 const auth = async (req, res, next) => {
-  try {
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({ success: false, message: 'Access denied. No token provided.' });
-    }
+  const header = req.headers.authorization;
+  if (!header?.startsWith('Bearer ')) {
+    return res.status(401).json({ success: false, message: 'Access denied. No token provided.' });
+  }
 
-    const token   = authHeader.split(' ')[1];
+  try {
+    const token = header.slice(7);
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-    // pg: positional $1 placeholder, returns rows array
     const user = await db.queryOne(
       `SELECT id, name, email, role, department, avatar, is_active,
               student_number, batch_number, batch_section
@@ -22,28 +18,19 @@ const auth = async (req, res, next) => {
       [decoded.id]
     );
 
-    if (!user) {
-      return res.status(401).json({ success: false, message: 'Token invalid: user not found.' });
-    }
-    if (!user.is_active) {
-      return res.status(403).json({ success: false, message: 'Account deactivated. Contact admin.' });
-    }
+    if (!user) return res.status(401).json({ success: false, message: 'Token invalid: user not found.' });
+    if (!user.is_active) return res.status(403).json({ success: false, message: 'Account deactivated. Contact admin.' });
 
     req.user = user;
     next();
   } catch (err) {
-    if (err.name === 'TokenExpiredError') {
-      return res.status(401).json({ success: false, message: 'Token expired. Please log in again.' });
-    }
-    return res.status(401).json({ success: false, message: 'Invalid token.' });
+    const message = err.name === 'TokenExpiredError' ? 'Token expired. Please log in again.' : 'Invalid token.';
+    res.status(401).json({ success: false, message });
   }
 };
 
-// Role-based access control
 const requireRole = (...roles) => (req, res, next) => {
-  if (!req.user) {
-    return res.status(401).json({ success: false, message: 'Unauthorized.' });
-  }
+  if (!req.user) return res.status(401).json({ success: false, message: 'Unauthorized.' });
   if (!roles.includes(req.user.role)) {
     return res.status(403).json({
       success: false,
@@ -53,8 +40,10 @@ const requireRole = (...roles) => (req, res, next) => {
   next();
 };
 
-const isAdmin          = requireRole('admin');
-const isTeacherOrAdmin = requireRole('teacher', 'admin');
-const isStudent        = requireRole('student');
-
-module.exports = { auth, requireRole, isAdmin, isTeacherOrAdmin, isStudent };
+module.exports = {
+  auth,
+  requireRole,
+  isAdmin: requireRole('admin'),
+  isTeacherOrAdmin: requireRole('teacher', 'admin'),
+  isStudent: requireRole('student'),
+};

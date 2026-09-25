@@ -1,6 +1,3 @@
-// ============================================================
-// src/App.js — Root Application with Routing
-// ============================================================
 import React from 'react';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { ToastContainer } from 'react-toastify';
@@ -13,14 +10,12 @@ import './index.css';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import Layout from './components/layout/Layout';
 
-// Auth
 import LandingAuthPage from './components/auth/LandingAuthPage';
 import Login from './components/auth/Login';
 import Register from './components/auth/Register';
 import Profile from './components/auth/Profile';
 import PasswordRecoveryPage from './components/auth/PasswordRecoveryPage';
 
-// Pages
 import Dashboard from './components/dashboard/Dashboard';
 import Announcements from './components/announcements/Announcements';
 import FreeClassrooms from './components/classrooms/FreeClassrooms';
@@ -36,7 +31,7 @@ import BusSchedule from './components/bus/BusSchedule';
 import Notifications from './components/notifications/Notifications';
 import UserManagement from './components/admin/UserManagement';
 
-const theme = createTheme({
+const THEME = createTheme({
   palette: {
     primary: { main: '#1a73e8', light: '#4285f4', dark: '#0d5bba' },
     secondary: { main: '#34a853' },
@@ -123,9 +118,9 @@ function AppRoutes() {
   );
 }
 
-function App() {
+export default function App() {
   return (
-    <ThemeProvider theme={theme}>
+    <ThemeProvider theme={THEME}>
       <CssBaseline />
       <AuthProvider>
         <BrowserRouter>
@@ -144,6 +139,3 @@ function App() {
     </ThemeProvider>
   );
 }
-
-export default App;
-

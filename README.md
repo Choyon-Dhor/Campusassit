@@ -59,7 +59,7 @@ campusassist/
 │   ├── uploads/
 │   │   ├── resources/
 │   │   └── routines/
-│   ├── .env
+│   ├── .env.example
 │   ├── package.json
 │   └── server.js
 │

@@ -135,7 +135,7 @@ export default function Dashboard() {
                   <p style={{ margin: '8px 0 0', color: '#5f6368', fontSize: 14 }}>No upcoming deadlines!</p>
                 </div>
               ) : (
-                deadlines.map(d => {
+                deadlines.slice(0, 5).map(d => {
                   const cd = getCountdown(d.deadline_date);
                   return (
                     <div key={d.id} className={`deadline-card ca-card mb-2 ${d.priority}`} style={{ padding: '12px 14px' }}>

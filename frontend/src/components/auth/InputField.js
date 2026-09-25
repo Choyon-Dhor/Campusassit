@@ -1,57 +1,54 @@
 import React from 'react';
 
+const borderColor = (error, success, dark) => {
+  if (error) return 'rgba(248,113,113,0.60)';
+  if (success) return 'rgba(74,222,128,0.50)';
+  return dark ? 'rgba(255,255,255,0.12)' : '#e2e8f0';
+};
+
 export default function InputField({
-  id,
-  label,
-  icon,
-  error,
-  success,
-  helperText,
-  trailing,
-  className = '',
-  inputClassName = '',
-  ...props
+  id, label, icon, error, success, helperText, trailing,
+  dark = true, className = '', inputClassName = '', ...props
 }) {
-  const describedBy = error ? `${id}-error` : helperText ? `${id}-hint` : undefined;
+  const ariaDesc = error ? `${id}-error` : helperText ? `${id}-hint` : undefined;
 
   return (
     <div className={className}>
-      <label htmlFor={id} className="mb-1.5 block text-sm font-semibold text-slate-700">
+      <label htmlFor={id} style={{ display: 'block', marginBottom: 6, fontSize: 13, fontWeight: 600, color: dark ? 'rgba(255,255,255,0.70)' : '#374151' }}>
         {label}
       </label>
-      <div
-        className={`group flex items-center gap-2.5 rounded-xl border bg-white px-3.5 py-1 shadow-[0_6px_18px_rgba(15,23,42,0.05)] transition focus-within:-translate-y-0.5 focus-within:shadow-[0_14px_28px_rgba(29,78,216,0.14)] ${
-          error
-            ? 'border-rose-300 focus-within:border-rose-400'
-            : success
-              ? 'border-emerald-300 focus-within:border-emerald-400'
-              : 'border-slate-200 focus-within:border-campus-400'
-        }`}
-      >
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-500">
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 10, borderRadius: 14,
+        border: `1px solid ${borderColor(error, success, dark)}`,
+        background: dark ? 'rgba(255,255,255,0.07)' : '#fff',
+        padding: '4px 14px 4px 10px',
+        boxShadow: dark ? '0 4px 14px rgba(0,0,0,0.20)' : '0 6px 18px rgba(15,23,42,0.05)',
+        transition: 'all 0.2s',
+      }}>
+        <span style={{
+          display: 'flex', width: 36, height: 36, flexShrink: 0,
+          alignItems: 'center', justifyContent: 'center', borderRadius: 10,
+          background: dark ? 'rgba(255,255,255,0.08)' : '#f1f5f9',
+          color: dark ? 'rgba(255,255,255,0.50)' : '#64748b',
+        }}>
           {icon}
         </span>
         <input
           id={id}
           aria-invalid={Boolean(error)}
-          aria-describedby={describedBy}
-          className={`w-full border-0 bg-transparent py-2.5 text-[14px] text-slate-900 outline-none placeholder:text-slate-400 ${inputClassName}`}
+          aria-describedby={ariaDesc}
+          style={{ flex: 1, border: 0, background: 'transparent', padding: '10px 0', fontSize: 14, outline: 'none', color: dark ? '#fff' : '#111827' }}
+          className={inputClassName}
           {...props}
         />
-        {trailing ? <div className="shrink-0">{trailing}</div> : null}
+        {trailing && <div style={{ flexShrink: 0 }}>{trailing}</div>}
       </div>
       {error ? (
-        <p id={`${id}-error`} className="mt-2 text-sm font-medium text-rose-600">
-          {error}
-        </p>
+        <p id={`${id}-error`} style={{ margin: '6px 0 0', fontSize: 12, fontWeight: 500, color: '#f87171' }}>{error}</p>
       ) : success ? (
-        <p id={`${id}-hint`} className="mt-2 text-sm font-medium text-emerald-600">
-          {helperText || 'Looks good.'}
-        </p>
+        <p id={`${id}-hint`} style={{ margin: '6px 0 0', fontSize: 12, fontWeight: 500, color: '#4ade80' }}>{helperText || 'Looks good.'}</p>
       ) : helperText ? (
-        <p id={`${id}-hint`} className="mt-2 text-sm text-slate-500">
-          {helperText}
-        </p>
+        <p id={`${id}-hint`} style={{ margin: '6px 0 0', fontSize: 12, color: dark ? 'rgba(255,255,255,0.35)' : '#9ca3af' }}>{helperText}</p>
       ) : null}
     </div>
   );

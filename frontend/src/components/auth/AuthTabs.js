@@ -6,7 +6,7 @@ const tabs = [
   { id: 'sign-up', label: 'Sign Up' },
 ];
 
-export default function AuthTabs({ value, onChange }) {
+export default function AuthTabs({ value, onChange, dark = false }) {
   const handleKeyDown = (event, currentIndex) => {
     if (event.key !== 'ArrowRight' && event.key !== 'ArrowLeft') return;
     event.preventDefault();
@@ -21,7 +21,12 @@ export default function AuthTabs({ value, onChange }) {
     <div
       role="tablist"
       aria-label="Authentication mode"
-      className="relative grid grid-cols-2 rounded-xl border border-slate-200 bg-slate-100 p-1"
+      style={{
+        display: 'grid', gridTemplateColumns: '1fr 1fr', borderRadius: 14,
+        border: dark ? '1px solid rgba(255,255,255,0.10)' : '1px solid #e2e8f0',
+        background: dark ? 'rgba(255,255,255,0.06)' : '#f1f5f9',
+        padding: 4, position: 'relative',
+      }}
     >
       {tabs.map((tab, index) => {
         const active = value === tab.id;
@@ -34,9 +39,14 @@ export default function AuthTabs({ value, onChange }) {
             aria-controls={`auth-panel-${tab.id}`}
             aria-selected={active}
             tabIndex={active ? 0 : -1}
-            className={`relative z-10 rounded-lg px-4 py-2 text-sm font-semibold transition ${
-              active ? 'text-campus-800' : 'text-slate-500 hover:text-slate-700'
-            }`}
+            style={{
+              position: 'relative', zIndex: 10, borderRadius: 10, padding: '9px 16px',
+              fontSize: 14, fontWeight: 600, border: 'none', cursor: 'pointer',
+              background: 'transparent', transition: 'all 0.2s',
+              color: active
+                ? dark ? '#fff' : '#1d4ed8'
+                : dark ? 'rgba(255,255,255,0.40)' : '#64748b',
+            }}
             onClick={() => onChange(tab.id)}
             onKeyDown={(event) => handleKeyDown(event, index)}
           >
@@ -44,7 +54,12 @@ export default function AuthTabs({ value, onChange }) {
               <motion.span
                 layoutId="auth-tab-pill"
                 transition={{ type: 'spring', stiffness: 420, damping: 36 }}
-                className="absolute inset-0 -z-10 rounded-lg border border-campus-100 bg-white shadow-sm"
+                style={{
+                  position: 'absolute', inset: 0, zIndex: -1, borderRadius: 10,
+                  border: dark ? '1px solid rgba(255,255,255,0.12)' : '1px solid rgba(29,78,216,0.15)',
+                  background: dark ? 'rgba(255,255,255,0.12)' : '#fff',
+                  boxShadow: dark ? '0 4px 12px rgba(0,0,0,0.30)' : '0 2px 8px rgba(15,23,42,0.08)',
+                }}
               />
             ) : null}
             {tab.label}

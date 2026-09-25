@@ -1,124 +1,75 @@
-// ============================================================
-// middleware/upload.js — Multer File Upload Configuration
-// ============================================================
-const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const multer = require('multer');
 
-const ensureDir = (dir) => {
+const MAX_SIZE = parseInt(process.env.MAX_FILE_SIZE, 10) || 10 * 1024 * 1024;
+
+function createStorage(subfolder, prefix) {
+  const dir = path.join(__dirname, '../uploads', subfolder);
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-};
 
-// Storage for resources (notes, question papers, etc.)
-const resourceStorage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    const dir = path.join(__dirname, '../uploads/resources');
-    ensureDir(dir);
-    cb(null, dir);
-  },
-  filename: (req, file, cb) => {
-    const unique = Date.now() + '-' + Math.round(Math.random() * 1e6);
-    const ext = path.extname(file.originalname);
-    const base = path.basename(file.originalname, ext).replace(/[^a-zA-Z0-9-_]/g, '_');
-    cb(null, `${base}-${unique}${ext}`);
-  },
-});
+  return multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, dir),
+    filename: (_req, file, cb) => {
+      const ext = path.extname(file.originalname);
+      const unique = `${Date.now()}-${Math.round(Math.random() * 1e6)}`;
+      if (prefix) {
+        cb(null, `${prefix}-${Date.now()}${ext}`);
+      } else {
+        const base = path.basename(file.originalname, ext).replace(/[^a-zA-Z0-9-_]/g, '_');
+        cb(null, `${base}-${unique}${ext}`);
+      }
+    },
+  });
+}
 
-// Storage for routine files (CSV/PDF)
-const routineStorage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    const dir = path.join(__dirname, '../uploads/routines');
-    ensureDir(dir);
-    cb(null, dir);
-  },
-  filename: (req, file, cb) => {
-    const unique = Date.now();
-    const ext = path.extname(file.originalname);
-    cb(null, `routine-${unique}${ext}`);
-  },
-});
-
-const fileFilter = (allowedTypes) => (req, file, cb) => {
+const fileFilter = (allowed) => (_req, file, cb) => {
   const ext = path.extname(file.originalname).toLowerCase().slice(1);
-  if (allowedTypes.includes(ext)) {
+  if (allowed.has(ext)) {
     cb(null, true);
   } else {
-    cb(new Error(`File type .${ext} not allowed. Allowed: ${allowedTypes.join(', ')}`), false);
+    cb(new Error(`File type .${ext} not allowed. Allowed: ${[...allowed].join(', ')}`), false);
   }
 };
 
-const uploadResource = multer({
-  storage: resourceStorage,
-  limits: { fileSize: parseInt(process.env.MAX_FILE_SIZE) || 10 * 1024 * 1024 },
-  fileFilter: fileFilter(['pdf', 'doc', 'docx', 'ppt', 'pptx', 'xls', 'xlsx', 'txt', 'zip']),
-});
-
-const uploadRoutine = multer({
-  storage: routineStorage,
-  limits: { fileSize: 5 * 1024 * 1024 },
-  fileFilter: fileFilter(['csv', 'pdf', 'xlsx']),
-});
-
-// Storage for bus schedule uploads
-const busStorage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    const dir = path.join(__dirname, '../uploads/bus');
-    ensureDir(dir);
-    cb(null, dir);
-  },
-  filename: (req, file, cb) => {
-    const unique = Date.now();
-    const ext = path.extname(file.originalname);
-    cb(null, `bus-schedule-${unique}${ext}`);
-  },
-});
-
-const uploadBusSchedule = multer({
-  storage: busStorage,
-  limits: { fileSize: 5 * 1024 * 1024 },
-  fileFilter: fileFilter(['csv']),
-});
-
-// Storage for assignment uploads
-const assignmentStorage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    const dir = path.join(__dirname, '../uploads/assignments');
-    ensureDir(dir);
-    cb(null, dir);
-  },
-  filename: (req, file, cb) => {
-    const unique = Date.now() + '-' + Math.round(Math.random() * 1e6);
-    const ext = path.extname(file.originalname);
-    const base = path.basename(file.originalname, ext).replace(/[^a-zA-Z0-9-_]/g, '_');
-    cb(null, `${base}-${unique}${ext}`);
-  },
-});
-
-const uploadAssignment = multer({
-  storage: assignmentStorage,
-  limits: { fileSize: parseInt(process.env.MAX_FILE_SIZE) || 10 * 1024 * 1024 },
-  fileFilter: fileFilter(['pdf', 'doc', 'docx', 'ppt', 'pptx', 'xls', 'xlsx', 'txt', 'zip', 'jpg', 'jpeg', 'png', 'gif']),
-});
-
-// Error handling wrapper
-const handleUploadError = (uploadMiddleware) => (req, res, next) => {
-  uploadMiddleware(req, res, (err) => {
+const wrapUpload = (mw) => (req, res, next) => {
+  mw(req, res, (err) => {
     if (err instanceof multer.MulterError) {
-      if (err.code === 'LIMIT_FILE_SIZE') {
-        return res.status(400).json({ success: false, message: 'File too large. Max size is 10MB.' });
-      }
-      return res.status(400).json({ success: false, message: err.message });
+      const message = err.code === 'LIMIT_FILE_SIZE' ? 'File too large. Max size is 10MB.' : err.message;
+      return res.status(400).json({ success: false, message });
     }
-    if (err) {
-      return res.status(400).json({ success: false, message: err.message });
-    }
+    if (err) return res.status(400).json({ success: false, message: err.message });
     next();
   });
 };
 
+const uploadResource = multer({
+  storage: createStorage('resources'),
+  limits: { fileSize: MAX_SIZE },
+  fileFilter: fileFilter(new Set(['pdf', 'doc', 'docx', 'ppt', 'pptx', 'xls', 'xlsx', 'txt', 'zip'])),
+});
+
+const uploadRoutine = multer({
+  storage: createStorage('routines', 'routine'),
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: fileFilter(new Set(['csv', 'pdf', 'xlsx'])),
+});
+
+const uploadBusSchedule = multer({
+  storage: createStorage('bus', 'bus-schedule'),
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: fileFilter(new Set(['csv'])),
+});
+
+const uploadAssignment = multer({
+  storage: createStorage('assignments'),
+  limits: { fileSize: MAX_SIZE },
+  fileFilter: fileFilter(new Set(['pdf', 'doc', 'docx', 'ppt', 'pptx', 'xls', 'xlsx', 'txt', 'zip', 'jpg', 'jpeg', 'png', 'gif'])),
+});
+
 module.exports = {
-  uploadResource: handleUploadError(uploadResource.single('file')),
-  uploadRoutine: handleUploadError(uploadRoutine.single('routine')),
-  uploadBusSchedule: handleUploadError(uploadBusSchedule.single('schedule')),
-  uploadAssignment: handleUploadError(uploadAssignment.single('file')),
+  uploadResource: wrapUpload(uploadResource.single('file')),
+  uploadRoutine: wrapUpload(uploadRoutine.single('routine')),
+  uploadBusSchedule: wrapUpload(uploadBusSchedule.single('schedule')),
+  uploadAssignment: wrapUpload(uploadAssignment.single('file')),
 };

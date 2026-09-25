@@ -1,16 +1,13 @@
-// ============================================================
-// src/context/AuthContext.js
-// ============================================================
-import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { authService } from '../services/api';
 import { clearStoredAuth, getStoredToken, getStoredUser, persistAuth } from '../services/authStorage';
 
 const AuthContext = createContext(null);
 
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(() => getStoredUser());
+  const [user, setUser] = useState(getStoredUser);
   const [loading, setLoading] = useState(true);
-  const [token, setToken] = useState(getStoredToken());
+  const [token, setToken] = useState(getStoredToken);
 
   const loadUser = useCallback(async () => {
     const savedToken = getStoredToken();
@@ -61,31 +58,28 @@ export const AuthProvider = ({ children }) => {
 
   const updateUser = (updated) => setUser((prev) => ({ ...prev, ...updated }));
 
-  const isAdmin = user?.role === 'admin';
-  const isTeacher = user?.role === 'teacher';
-  const isStudent = user?.role === 'student';
+  const role = user?.role;
+  const isAdmin = role === 'admin';
+  const isTeacher = role === 'teacher';
+  const isStudent = role === 'student';
   const isTeacherOrAdmin = isTeacher || isAdmin;
 
-  return (
-    <AuthContext.Provider
-      value={{
-        user,
-        token,
-        loading,
-        login,
-        register,
-        logout,
-        updateUser,
-        isAdmin,
-        isTeacher,
-        isStudent,
-        isTeacherOrAdmin,
-        isAuthenticated: !!user,
-      }}
-    >
-      {children}
-    </AuthContext.Provider>
-  );
+  const value = useMemo(() => ({
+    user,
+    token,
+    loading,
+    login,
+    register,
+    logout,
+    updateUser,
+    isAdmin,
+    isTeacher,
+    isStudent,
+    isTeacherOrAdmin,
+    isAuthenticated: Boolean(user),
+  }), [user, token, loading, isAdmin, isTeacher, isStudent, isTeacherOrAdmin]);
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
 
 export const useAuth = () => {

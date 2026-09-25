@@ -1,15 +1,12 @@
-// ============================================================
-// controllers/announcementController.js (pg)
-// ============================================================
 const { announcementRepo } = require('../repositories');
-const notificationService  = require('../services/NotificationService');
+const notificationService = require('../services/NotificationService');
 const db = require('../config/database');
 
-exports.getAll = async (req, res) => {
+exports.getAll = async (req, res, next) => {
   try {
     const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
     const limit = Math.max(parseInt(req.query.limit, 10) || 10, 1);
-    const role = req.user.role;
+    const { role, id: userId } = req.user;
 
     const globalParams = [];
     let globalFilter = '';
@@ -38,44 +35,42 @@ exports.getAll = async (req, res) => {
     const classroomParams = [];
 
     if (role === 'teacher') {
-      classroomParams.push(req.user.id);
+      classroomParams.push(userId);
       classroomSql += ' WHERE c.teacher_id = $1';
     } else if (role === 'student') {
-      classroomParams.push(req.user.id);
+      classroomParams.push(userId);
       classroomSql += `
         JOIN classroom_students cs ON cs.classroom_id = ca.classroom_id
         WHERE cs.student_id = $1`;
     }
 
-    const classroomAnnouncements = (await db.query(classroomSql, classroomParams)).map((announcement) => ({
-      ...announcement,
-      id: `classroom-${announcement.id}`,
-      source_id: announcement.id,
+    const classroomAnnouncements = (await db.query(classroomSql, classroomParams)).map((item) => ({
+      ...item,
+      id: `classroom-${item.id}`,
+      source_id: item.id,
     }));
 
-    const combined = [...globalAnnouncements, ...classroomAnnouncements]
-      .sort((left, right) => {
-        if (left.is_pinned !== right.is_pinned) return left.is_pinned ? -1 : 1;
-        return new Date(right.created_at) - new Date(left.created_at);
-      });
+    const combined = [...globalAnnouncements, ...classroomAnnouncements].sort((a, b) => {
+      if (a.is_pinned !== b.is_pinned) return b.is_pinned ? 1 : -1;
+      return new Date(b.created_at) - new Date(a.created_at);
+    });
 
     const total = combined.length;
     const offset = (page - 1) * limit;
-    const announcements = combined.slice(offset, offset + limit);
 
     res.json({
       success: true,
-      announcements,
+      announcements: combined.slice(offset, offset + limit),
       total,
       page,
       totalPages: Math.ceil(total / limit),
     });
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    next(err);
   }
 };
 
-exports.create = async (req, res) => {
+exports.create = async (req, res, next) => {
   try {
     const { title, content, category = 'general', target_role = 'all', is_pinned = false } = req.body;
     if (!title || !content) {
@@ -83,49 +78,55 @@ exports.create = async (req, res) => {
     }
 
     const created = await announcementRepo.create({
-      title, content, author_id: req.user.id, category, target_role, is_pinned,
+      title,
+      content,
+      author_id: req.user.id,
+      category,
+      target_role,
+      is_pinned,
     });
 
-    // Observer: notify all relevant users (exclude author)
-    let userQuery = `SELECT id FROM users WHERE is_active = TRUE AND id != $1`;
-    const params  = [req.user.id];
-    if (target_role !== 'all') {
-      params.push(target_role);
-      userQuery += ` AND role = $2`;
-    }
+    const userQuery = `
+      SELECT id FROM users
+      WHERE is_active = TRUE AND id != $1
+      ${target_role !== 'all' ? 'AND role = $2' : ''}`;
+    const params = target_role !== 'all' ? [req.user.id, target_role] : [req.user.id];
+
     const users = await db.query(userQuery, params);
-    await notificationService.notifyNewAnnouncement(created, users.map(u => u.id));
+    await notificationService.notifyNewAnnouncement(created, users.map((u) => u.id));
 
     res.status(201).json({ success: true, announcement: created });
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    next(err);
   }
 };
 
-exports.update = async (req, res) => {
+exports.update = async (req, res, next) => {
   try {
     const ann = await announcementRepo.findById(req.params.id);
     if (!ann) return res.status(404).json({ success: false, message: 'Not found.' });
     if (ann.author_id !== req.user.id && req.user.role !== 'admin') {
       return res.status(403).json({ success: false, message: 'Permission denied.' });
     }
+
     const updated = await announcementRepo.update(req.params.id, req.body);
     res.json({ success: true, announcement: updated });
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    next(err);
   }
 };
 
-exports.delete = async (req, res) => {
+exports.delete = async (req, res, next) => {
   try {
     const ann = await announcementRepo.findById(req.params.id);
     if (!ann) return res.status(404).json({ success: false, message: 'Not found.' });
     if (ann.author_id !== req.user.id && req.user.role !== 'admin') {
       return res.status(403).json({ success: false, message: 'Permission denied.' });
     }
+
     await announcementRepo.delete(req.params.id);
     res.json({ success: true, message: 'Deleted.' });
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    next(err);
   }
 };

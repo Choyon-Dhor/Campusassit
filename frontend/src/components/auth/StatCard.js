@@ -1,35 +1,38 @@
 import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 
-export default function StatCard({ value, suffix = '', label, delay = 0 }) {
+export default function StatCard({ value, suffix = '', label, delay = 0, dark = false }) {
   const [count, setCount] = useState(0);
 
   useEffect(() => {
-    let frameId;
-    let startTime;
     const duration = 700 + delay;
-
-    const tick = (timestamp) => {
-      if (!startTime) startTime = timestamp;
-      const progress = Math.min((timestamp - startTime) / duration, 1);
-      setCount(Math.round(progress * value));
-      if (progress < 1) frameId = window.requestAnimationFrame(tick);
+    let frameId;
+    let t0;
+    const tick = (ts) => {
+      if (!t0) t0 = ts;
+      const p = Math.min((ts - t0) / duration, 1);
+      setCount(Math.round(p * value));
+      if (p < 1) frameId = requestAnimationFrame(tick);
     };
-
-    frameId = window.requestAnimationFrame(tick);
-    return () => window.cancelAnimationFrame(frameId);
+    frameId = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frameId);
   }, [delay, value]);
 
   return (
     <motion.article
       whileHover={{ y: -4 }}
-      className="rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_10px_24px_rgba(15,23,42,0.06)]"
+      style={{
+        borderRadius: 16, padding: 16,
+        border: dark ? '1px solid rgba(255,255,255,0.10)' : '1px solid #e2e8f0',
+        background: dark ? 'rgba(255,255,255,0.05)' : '#fff',
+        backdropFilter: dark ? 'blur(12px)' : 'none',
+        boxShadow: dark ? '0 8px 24px rgba(0,0,0,0.20)' : '0 10px 24px rgba(15,23,42,0.06)',
+      }}
     >
-      <div className="mb-1.5 font-display text-3xl font-extrabold tracking-tight text-slate-900">
-        {count}
-        <span className="text-campus-600">{suffix}</span>
+      <div style={{ marginBottom: 6, fontSize: 28, fontWeight: 800, letterSpacing: '-0.03em', color: dark ? '#fff' : '#0f172a' }}>
+        {count}<span style={{ color: '#3b82f6' }}>{suffix}</span>
       </div>
-      <p className="m-0 text-xs leading-5 text-slate-600">{label}</p>
+      <p style={{ margin: 0, fontSize: 12, lineHeight: 1.5, color: dark ? 'rgba(255,255,255,0.50)' : '#64748b' }}>{label}</p>
     </motion.article>
   );
 }
