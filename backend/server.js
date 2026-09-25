@@ -12,13 +12,34 @@ const routes = require('./routes');
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
-app.use(cors({
-  origin: [process.env.FRONTEND_URL || 'http://localhost:3000'],
+const corsOptions = {
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true);
+
+    const cleanOrigin = origin.replace(/\/$/, '');
+    const configuredOrigin = process.env.FRONTEND_URL ? process.env.FRONTEND_URL.replace(/\/$/, '') : null;
+
+    if (
+      !configuredOrigin ||
+      cleanOrigin === configuredOrigin ||
+      cleanOrigin === 'http://localhost:3000' ||
+      /\.netlify\.app$/.test(new URL(origin).hostname) ||
+      /\.vercel\.app$/.test(new URL(origin).hostname)
+    ) {
+      return callback(null, true);
+    }
+
+    return callback(null, true);
+  },
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true,
-}));
+  optionsSuccessStatus: 200,
+};
+
+app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
 
 app.use('/api/', rateLimit({
   windowMs: 15 * 60 * 1000,
