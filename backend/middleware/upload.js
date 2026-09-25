@@ -2,11 +2,21 @@ const path = require('path');
 const fs = require('fs');
 const multer = require('multer');
 
+const os = require('os');
+
 const MAX_SIZE = parseInt(process.env.MAX_FILE_SIZE, 10) || 10 * 1024 * 1024;
+const isServerless = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.NETLIFY);
 
 function createStorage(subfolder, prefix) {
-  const dir = path.join(__dirname, '../uploads', subfolder);
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  const dir = isServerless
+    ? path.join(os.tmpdir(), 'uploads', subfolder)
+    : path.join(__dirname, '../uploads', subfolder);
+
+  try {
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  } catch (err) {
+    console.warn(`[Upload] Notice: could not create upload dir ${dir}:`, err.message);
+  }
 
   return multer.diskStorage({
     destination: (_req, _file, cb) => cb(null, dir),

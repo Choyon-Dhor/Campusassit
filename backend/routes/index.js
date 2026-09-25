@@ -18,8 +18,15 @@ const busCtrl = require('../controllers/busController');
 const { resourceRepo } = require('../repositories');
 const recommendationService = require('../services/RecommendationService');
 
-const router = express.Router();
-const tmpUpload = multer({ dest: path.join(__dirname, '../uploads/tmp'), limits: { fileSize: 2 * 1024 * 1024 } });
+const os = require('os');
+const isServerless = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.NETLIFY);
+const tmpUploadDir = isServerless ? path.join(os.tmpdir(), 'uploads', 'tmp') : path.join(__dirname, '../uploads/tmp');
+try {
+  if (!fs.existsSync(tmpUploadDir)) fs.mkdirSync(tmpUploadDir, { recursive: true });
+} catch (e) {
+  // Ignore in read-only environments
+}
+const tmpUpload = multer({ dest: tmpUploadDir, limits: { fileSize: 2 * 1024 * 1024 } });
 
 const authRouter = express.Router();
 authRouter.post('/register', authCtrl.register);

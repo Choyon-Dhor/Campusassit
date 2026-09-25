@@ -54,14 +54,19 @@ if (process.env.NODE_ENV === 'development') {
   app.use(morgan('dev'));
 }
 
-app.get('/health', (_req, res) => {
+const healthHandler = async (_req, res) => {
+  const dbOk = await db.testConnection().catch(() => false);
   res.json({
-    status: 'OK',
+    status: dbOk ? 'OK' : 'DEGRADED',
     app: 'CampusAssist API',
     version: '1.0.0',
+    database: dbOk ? 'connected' : 'disconnected',
     timestamp: new Date().toISOString(),
   });
-});
+};
+
+app.get('/health', healthHandler);
+app.get('/api/health', healthHandler);
 
 app.use('/api', routes);
 
