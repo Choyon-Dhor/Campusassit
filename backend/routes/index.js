@@ -19,6 +19,7 @@ const { resourceRepo } = require('../repositories');
 const recommendationService = require('../services/RecommendationService');
 
 const os = require('os');
+const router = express.Router();
 const isServerless = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.NETLIFY);
 const tmpUploadDir = isServerless ? path.join(os.tmpdir(), 'uploads', 'tmp') : path.join(__dirname, '../uploads/tmp');
 try {
